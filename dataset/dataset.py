@@ -4,7 +4,7 @@ import math
 import numpy as np
 import torchvision.transforms as transforms
 from PIL import Image, ImageDraw
-from utils import parse_xml, gaussian_radius, draw_gaussian
+from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian
 from torch.utils.data.dataset import Dataset
 
 class UIDataset(Dataset):

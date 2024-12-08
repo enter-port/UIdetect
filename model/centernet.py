@@ -1,7 +1,7 @@
 from torch import nn
 import math
-from net.backbone.resnet import resnet50, resnet101
-from core.loss import focal_loss, l1_loss
+from model.backbone.resnet import resnet50, resnet101
+from utils.loss import focal_loss, l1_loss
 
 
 class CenterNet(nn.Module):
