@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 from PIL import Image, ImageDraw
 from torch.utils.data.dataset import Dataset
-from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian
+from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize
 
 class UIDataset(Dataset):
     def __init__(self, data_path, category_path, input_shape=(640, 480), is_train=True, split_radio=0.8):
@@ -26,7 +26,7 @@ class UIDataset(Dataset):
                 self.category.append(cat)
         self.num_cat = len(self.category)
         
-        # if no pre-difined  train-test split exists, we create a random one
+        # if no pre-defined train-test split exists, we create a random one
         if not os.path.exists(data_path + "/train_test_split.json"):
             print("No train-test split. We create one at random.")
             datanames = []
@@ -72,24 +72,20 @@ class UIDataset(Dataset):
         
             # read in .png image and convert it into desired size
             image = Image.open(img_path)
-            original_width, original_height = image.size
-            image = transform(image)
-            image = np.array(image)[:, :, :-1]
-            self.images.append(image)
+            image = np.array(image)[:, :, :3]
             
             # read in bbox and name from .xml file
             coords, names = parse_xml(xml_path)
-            bbox = []
+            image, bbox = image_resize(image, input_shape, np.array(coords))
             assert len(coords) == len(names)
-            for i in range(len(coords)):
-                bbox.append([
-                    int(coords[i][0] / original_width * input_shape[0]),
-                    int(coords[i][1] / original_height * input_shape[1]),
-                    int(coords[i][2] / original_width * input_shape[0]),
-                    int(coords[i][3] / original_height * input_shape[1]),
-                    int(self.category.index(names[i].lower()))
-                ])
+            
+            # add category index to bbox
+            category_indices = np.array([int(self.category.index(name.lower())) for name in names])
+            bbox = np.column_stack((bbox, category_indices))
+            
+            self.images.append(image)
             self.bboxes.append(bbox)
+            
         self.length = len(self.images)
         assert len(self.images) == len(self.bboxes)
         assert len(self.images) == len(data_names)
