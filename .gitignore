@@ -1,4 +1,9 @@
 __pycache__
-data
+data/coredraw
+data/jiguang
+data/onedrive
+data/skype
+data/winmediaplayer
 logs
 eval
+__init__.py
