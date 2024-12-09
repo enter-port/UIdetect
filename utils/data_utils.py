@@ -202,12 +202,13 @@ def image_resize(image, target_size, gt_boxes=None):
     image_resized = cv2.resize(image, (nw, nh))
 
     dw, dh = (iw - nw) // 2, (ih - nh) // 2
-    image_paded = np.full(shape=[ih, iw, 3], fill_value=128.0)
-    image_paded[dh:nh+dh, dw:nw+dw, :] = image_resized
-
+    image_padded = cv2.copyMakeBorder(image_resized, dh, dh if (ih-nh)%2==0 else dh+1, 
+                                      dw, dw if (iw-nw)%2==0 else dw+1, 
+                                      cv2.BORDER_CONSTANT, value=(128, 128, 128))
+    assert image_padded.shape[:2] == target_size
     if gt_boxes is None:
-        return image_paded
+        return image_padded
     else:
         gt_boxes[:, [0, 2]] = gt_boxes[:, [0, 2]] * scale + dw
         gt_boxes[:, [1, 3]] = gt_boxes[:, [1, 3]] * scale + dh
-        return image_paded, gt_boxes
+        return image_padded, gt_boxes

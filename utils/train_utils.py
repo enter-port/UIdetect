@@ -68,7 +68,7 @@ def postprocess_output(hms, whs, offsets, confidence, device):
 
 def decode_bbox(prediction, input_shape, dev, image_shape=None, remove_pad=False, need_nms=False, nms_thres=0.4):
     """
-    Decode postprecess_output output
+    Decode postprocess_output output
     Args:
         prediction: postprecess_output output
         input_shape: model input shape
@@ -183,3 +183,5 @@ def draw_bbox(image, bboxes, labels, class_names, scores=None, show_name=False):
                    fontScale, (255, 255, 255), thickness//2, lineType=cv2.LINE_AA)
 
     return draw_image
+
+

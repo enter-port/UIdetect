@@ -11,7 +11,7 @@ from torch.utils.data.dataset import Dataset
 from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize
 
 class UIDataset(Dataset):
-    def __init__(self, data_path, category_path, input_shape=(640, 480), is_train=True, split_radio=0.8):
+    def __init__(self, data_path, category_path, input_shape=(1080, 1080), is_train=True, split_radio=0.8):
         super(UIDataset, self).__init__()
         self.stride = 4
         self.input_shape = input_shape
@@ -62,9 +62,6 @@ class UIDataset(Dataset):
         # read in images, boundboxes and names; name is expressed as index of category
         self.images = []
         self.bboxes = []    # the bboxes should be a list of bbox, bbox:[[x0, y0, x1, y1, name], [...]]
-        transform = transforms.Compose([
-            transforms.Resize((input_shape[0], input_shape[1])),
-        ])
         pbar = tqdm(data_names)
         for name in pbar:
             img_path = data_path + name+ ".png"
