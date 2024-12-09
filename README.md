@@ -19,7 +19,10 @@ https://github.com/Runist/torch_CenterNet
 ## 目前已完成的
 
 1. 适配数据集的`dataset.py`文件，包括了`heatmap`的实现，给出的数据与https://github.com/Runist/torch_CenterNet中实现的一致。
+2. 训练。
 
 ## TODO
 
-1. 实现training：参考CenterNet的写法
+1. 将结果转化为`.xml`
+2. 运行`eval`得出结果
+3. 尝试融合DINO
