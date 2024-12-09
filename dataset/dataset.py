@@ -1,14 +1,17 @@
 import os 
-import torch
 import math
+import json
+import torch
+import random
 import numpy as np
 import torchvision.transforms as transforms
+from tqdm import tqdm
 from PIL import Image, ImageDraw
-from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian
 from torch.utils.data.dataset import Dataset
+from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian
 
 class UIDataset(Dataset):
-    def __init__(self, data_path, category_path, input_shape=(640, 480), is_train=True):
+    def __init__(self, data_path, category_path, input_shape=(640, 480), is_train=True, split_radio=0.8):
         super(UIDataset, self).__init__()
         self.stride = 4
         self.input_shape = input_shape
@@ -23,50 +26,74 @@ class UIDataset(Dataset):
                 self.category.append(cat)
         self.num_cat = len(self.category)
         
+        # if no pre-difined  train-test split exists, we create a random one
+        if not os.path.exists(data_path + "/train_test_split.json"):
+            print("No train-test split. We create one at random.")
+            datanames = []
+            subject = os.listdir(data_path)
+            for sub in subject:
+                if not os.path.isdir(data_path + "/" + sub):
+                    continue
+                files = os.listdir(data_path + "/" + sub)
+                for filename in files:
+                    file_root, file_extension = os.path.splitext(filename)
+                    print("/{}/{}".format(sub, file_root))
+                    if "/{}/{}".format(sub, file_root) not in datanames:
+                        datanames.append("/{}/{}".format(sub, file_root))
+            random.shuffle(datanames)
+            train_datanames = datanames[:int(len(datanames) * split_radio)]
+            test_datanames = datanames[int(len(datanames) * split_radio):]
+            data_dict = {"train": train_datanames, "test": test_datanames}
+            with open(data_path + "/train_test_split.json", 'w') as f:
+                json.dump(data_dict, f, indent=4)
+            print("Split strored at {}.".format(data_path + "/train_test_split.json"))
+        
+        # else we directly read for train_test_split.json
+        else:
+            print("Split exists. Using split at{}".format(data_path + "/train_test_split.json"))
+            with open(data_path + "/train_test_split.json", 'r') as f:
+                data = json.load(f)
+            train_datanames = data["train"]
+            test_datanames = data["test"]
+            
+        # Set the files we want to read according to IS_TRAIN
+        data_names = train_datanames if is_train else test_datanames
+            
         # read in images, boundboxes and names; name is expressed as index of category
         self.images = []
         self.bboxes = []    # the bboxes should be a list of bbox, bbox:[[x0, y0, x1, y1, name], [...]]
         transform = transforms.Compose([
             transforms.Resize((input_shape[0], input_shape[1])),
         ])
-        subject = os.listdir(data_path)
-        for sub in subject:
-            if not os.path.isdir(data_path + "/" + sub):
-                continue
-            print("Initializing {}".format(sub))
-            files = os.listdir(data_path + "/" + sub)
-            for filename in files:
-                file_root, file_extension = os.path.splitext(filename)
-                # .png and .xml files have the same name, so in order to avoid repetition
-                # we overlook the name of the .xml files and process the name of .png file twice
-                if file_extension == ".xml":
-                    continue 
-                img_path = data_path + "/" + sub + "/" + file_root + ".png"
-                xml_path = data_path + "/" + sub + "/" + file_root + ".xml"
-                
-                # read in .png image and convert it into desired size
-                image = Image.open(img_path)
-                original_width, original_height = image.size
-                image = transform(image)
-                image = np.array(image)[:, :, :-1]
-                self.images.append(image)
-                
-                # read in bbox and name from .xml file
-                coords, names = parse_xml(xml_path)
-                bbox = []
-                assert len(coords) == len(names)
-                for i in range(len(coords)):
-                    bbox.append([
-                        int(coords[i][0] / original_width * input_shape[0]),
-                        int(coords[i][1] / original_height * input_shape[1]),
-                        int(coords[i][2] / original_width * input_shape[0]),
-                        int(coords[i][3] / original_height * input_shape[1]),
-                        int(self.category.index(names[i].lower()))
-                    ])
-                self.bboxes.append(bbox)
+        pbar = tqdm(data_names)
+        for name in pbar:
+            img_path = data_path + name+ ".png"
+            xml_path = data_path + name + ".xml"
+        
+            # read in .png image and convert it into desired size
+            image = Image.open(img_path)
+            original_width, original_height = image.size
+            image = transform(image)
+            image = np.array(image)[:, :, :-1]
+            self.images.append(image)
+            
+            # read in bbox and name from .xml file
+            coords, names = parse_xml(xml_path)
+            bbox = []
+            assert len(coords) == len(names)
+            for i in range(len(coords)):
+                bbox.append([
+                    int(coords[i][0] / original_width * input_shape[0]),
+                    int(coords[i][1] / original_height * input_shape[1]),
+                    int(coords[i][2] / original_width * input_shape[0]),
+                    int(coords[i][3] / original_height * input_shape[1]),
+                    int(self.category.index(names[i].lower()))
+                ])
+            self.bboxes.append(bbox)
         self.length = len(self.images)
         assert len(self.images) == len(self.bboxes)
-        print("Initialize Done. {} objects in total.".format(self.length))
+        assert len(self.images) == len(data_names)
+        print("{} Dataset Initialize Done. {} objects in total.".format("Train" if is_train else "Test", self.length))
         
     def __len__(self):
         return self.length

@@ -8,7 +8,7 @@ https://github.com/Runist/torch_CenterNet
 
 尝试使用CenterNet进行UI按键检测
 
-将助教给的数据解压缩后放到`/data/traindata`文件夹下，并且将主目录的`categories.txt`也放入`/data/traindata`
+将助教给的数据解压缩后放到`/data`文件夹下，并且将主目录的`categories.txt`也放入`/data`
 
 `playground.py`没啥用处，是我尝试一些代码的草稿，随便删
 
