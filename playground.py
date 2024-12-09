@@ -2,6 +2,11 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import os
 import cv2
+import PIL
+from utils.data_utils import image_resize
+from dataset.dataset import UIDataset
+from torch.utils.data import DataLoader
+from utils.train_utils import *
 
 def parse_xml(xml_path, CLASS_NAME):
     '''
@@ -45,31 +50,61 @@ skype: 3120 * 2080
 winmediaplayer: 1919 * 1079
 """
 
-data_path = "./data/traindata"
-subject = os.listdir(data_path)
-all_names = list()
-for sub in subject:
-    files = os.listdir(data_path + "/" + sub)
-    for filename in files:
-        file_root, file_extension = os.path.splitext(filename)
-        if file_extension == ".xml":
-            _, names = parse_xml(data_path + "/" + sub + "/"+ filename, "AJHFIUGEUJNIFUO")
-            for name in names:
-                if name == "level_2":
-                    print(sub, filename)
-                if name not in all_names:
-                    all_names.append(name)
-                    
-print(all_names)
-    
-test_path = "./data/traindata/coredraw/frame_3_2"
-xml_path = test_path + ".xml"
-img_path = test_path + ".png"
-coords = parse_xml(xml_path, "FILLING")
 
-img = cv2.imread(img_path)
-for rect in coords:
-    cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), (0, 0, 255), 2)
-img = cv2.resize(img, (img.shape[1]//4, img.shape[0]//4)) 
-cv2.imshow('img', img)
-cv2.waitKey()
+def main():
+    image = PIL.Image.open("./data/coredraw/frame_1.png")    
+    test_path = "./data/coredraw/frame_1"
+    xml_path = test_path + ".xml"
+    img_path = test_path + ".png"
+    coords, names = parse_xml(xml_path, "FILLING")
+
+    category_path = "./data/categories.txt"
+    category = []
+    with open(category_path, 'r', encoding='utf-8') as file:
+        for line in file:
+            cat = line.strip()
+            category.append(cat)
+
+    """image = np.array(image)
+    image = image[:, :, :3]
+    coords = np.array(coords)
+    category_indices = np.array([int(category.index(name.lower())) for name in names])
+
+    image, bbox = image_resize(image, (960, 1280), coords)
+    bbox = np.column_stack((bbox, category_indices))       
+    draw_image = draw_bbox(image, bbox, range(len(category)), category, show_name=True)
+
+    print(draw_image.shape)"""
+    # cv2.imshow('img', draw_image)
+    # cv2.waitKey()
+    
+    input_shape = (1080, 1920)
+
+    test_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=False)
+    test_loader = DataLoader(test_dataset, shuffle=False, batch_size=1, num_workers=2, pin_memory=True)
+
+    device = torch.device("cpu")
+
+    for images, hms_true, whs_true, offsets_true, offset_masks_true in test_loader:
+        outputs_true = postprocess_output(hms_true, whs_true, offsets_true, 0.999, device)
+        outputs_true = decode_bbox(outputs_true, (input_shape[1], input_shape[0]), device, need_nms=True, nms_thres=0.4)
+        images = images.cpu().numpy()
+        for i in range(len(images)):
+            image = images[i]
+
+            output_true = outputs_true[i]
+            if len(output_true) != 0:
+                output_true = output_true.data.cpu().numpy()
+                labels_true = output_true[:, 5]
+                bboxes_true = output_true[:, :4]
+            else:
+                labels_true = []
+                bboxes_true = []
+            
+            image_true = draw_bbox(image, bboxes_true, labels_true, category, show_name=True)
+            cv2.imshow("img", image_true)
+            cv2.waitKey(0)
+        break
+
+if __name__  == "__main__":
+    main()
