@@ -212,3 +212,27 @@ def image_resize(image, target_size, gt_boxes=None):
         gt_boxes[:, [0, 2]] = gt_boxes[:, [0, 2]] * scale + dw
         gt_boxes[:, [1, 3]] = gt_boxes[:, [1, 3]] * scale + dh
         return image_padded, gt_boxes
+    
+def preprocess_input(image):
+    mean = [0.40789655, 0.44719303, 0.47026116]
+    std = [0.2886383, 0.27408165, 0.27809834]
+
+    # mean = [0.485, 0.456, 0.406]
+    # std = [0.229, 0.224, 0.225]
+
+    image = (image / 255. - mean) / std
+    image = np.transpose(image, (2, 0, 1))
+    return image
+
+
+def recover_input(image):
+    mean = [0.40789655, 0.44719303, 0.47026116]
+    std = [0.2886383, 0.27408165, 0.27809834]
+
+    # mean = [0.485, 0.456, 0.406]
+    # std = [0.229, 0.224, 0.225]
+
+    image = np.transpose(image, (1, 2, 0))
+    image = (image * std + mean) * 255
+
+    return image

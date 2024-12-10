@@ -10,6 +10,7 @@ from model.centernet import CenterNet
 from dataset.dataset import UIDataset
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
+from utils.train_utils import get_summary_image
 
 class CosineAnnealingWarmupRestarts(optim.lr_scheduler._LRScheduler):
     """
@@ -117,7 +118,7 @@ def remove_dir_and_create_dir(dir_name, is_remove=True):
         else:
             print(dir_name, "is exist.")
             
-def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, writer):
+def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, writer, cat, input_shape):
     global step
     
     model.train()
@@ -130,7 +131,7 @@ def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, wr
         tbar.set_description("epoch {}".format(epoch))
 
         # Set variables for training
-        images = images.permute(0, 3, 1, 2).float().to(device)
+        images = images.float().to(device)
         hms_true = hms_true.float().to(device)
         whs_true = whs_true.float().to(device)
         offsets_true = offsets_true.float().to(device)
@@ -152,6 +153,13 @@ def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, wr
         off_loss = off_loss.mean()
 
         total_loss.append(loss.item())
+        
+        if step % image_write_step == 0:
+            summary_images = get_summary_image(images, input_shape, cat, 0.1,
+                                            hms_true, whs_true, offsets_true,
+                                            hms_pred, whs_pred, offsets_pred, device)
+            for i, summary_image in enumerate(summary_images):
+                writer.add_image('train_images_{}'.format(i), summary_image, global_step=step, dataformats="HWC")
 
         writer.add_scalar("loss", loss.item(), step)
         writer.add_scalar("c_loss", c_loss.item(), step)
@@ -174,7 +182,7 @@ def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, wr
 
     return np.mean(total_loss)
 
-def eval_one_epochs(model, val_loader, epoch, device, writer):
+def eval_one_epochs(model, val_loader, epoch, device, writer, cat, input_shape):
 
     model.eval()
 
@@ -188,7 +196,7 @@ def eval_one_epochs(model, val_loader, epoch, device, writer):
         for images, hms_true, whs_true, offsets_true, offset_masks_true in val_loader:
 
             # Set variables for training
-            images = images.permute(0, 3, 1, 2).float().to(device)
+            images = images.float().to(device)
             hms_true = hms_true.float().to(device)
             whs_true = whs_true.float().to(device)
             offsets_true = offsets_true.float().to(device)
@@ -210,6 +218,14 @@ def eval_one_epochs(model, val_loader, epoch, device, writer):
             total_c_loss.append(c_loss.item())
             total_wh_loss.append(wh_loss.item())
             total_offset_loss.append(off_loss.item())
+            
+            if write_image:
+                write_image = False
+                summary_images = get_summary_image(images, input_shape, cat, 0.1,
+                                            hms_true, whs_true, offsets_true,
+                                            hms_pred, whs_pred, offsets_pred, device)
+                for i, summary_image in enumerate(summary_images):
+                    writer.add_image('val_images_{}'.format(i), summary_image, global_step=epoch, dataformats="HWC")
 
             # clear batch variables from memory
             del images, hms_true, whs_true, offsets_true, offset_masks_true
@@ -268,8 +284,8 @@ def main():
     # get train test dataset
     train_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=True)
     test_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=False) 
-    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size, num_workers=2, pin_memory=True)
-    test_loader = DataLoader(test_dataset, shuffle=True, batch_size=batch_size, num_workers=2, pin_memory=True)
+    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size, num_workers=0, pin_memory=True)
+    test_loader = DataLoader(test_dataset, shuffle=True, batch_size=batch_size, num_workers=0, pin_memory=True)
     writer = SummaryWriter(summary_path)
     
     freeze_step = len(train_dataset) // batch_size
@@ -286,8 +302,8 @@ def main():
         print("Freeze backbone and decoder, train {} epochs.".format(freeze_epoch))
         model.freeze_backbone()
         for epoch in range(freeze_epoch):
-            train_loss = train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, writer)
-            val_loss = eval_one_epochs(model, test_loader, epoch, device, writer)
+            train_loss = train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, writer, category, input_shape)
+            val_loss = eval_one_epochs(model, test_loader, epoch, device, writer, category, input_shape)
             print("=> loss: {:.4f}   val_loss: {:.4f}".format(train_loss, val_loss))
             torch.save(model,
                        '{}/epoch={}_loss={:.4f}_val_loss={:.4f}.pt'.
@@ -299,8 +315,8 @@ def main():
         model.unfreeze_backbone()
         for epoch in range(unfreeze_epoch):
             epoch += freeze_epoch
-            train_loss = train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, writer)
-            val_loss = eval_one_epochs(model, test_loader, epoch, device, writer)
+            train_loss = train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, writer, category, input_shape)
+            val_loss = eval_one_epochs(model, test_loader, epoch, device, writer, category, input_shape)
             print("=> loss: {:.4f}   val_loss: {:.4f}".format(train_loss, val_loss))
             torch.save(model,
                        '{}/epoch={}_loss={:.4f}_val_loss={:.4f}.pt'.

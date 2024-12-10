@@ -2,6 +2,7 @@ import torch
 import cv2
 import numpy as np
 from torchvision.ops import nms
+from utils.data_utils import recover_input
 
 def postprocess_output(hms, whs, offsets, confidence, device):
     """
@@ -185,3 +186,40 @@ def draw_bbox(image, bboxes, labels, class_names, scores=None, show_name=False):
     return draw_image
 
 
+def get_summary_image(images, input_shape, category, thresh,
+                      hms_true, whs_true, offsets_true,
+                      hms_pred, whs_pred, offsets_pred, device):
+    summary_images = []
+    
+    outputs_true = postprocess_output(hms_true, whs_true, offsets_true, 0.999, device)
+    outputs_true = decode_bbox(outputs_true, (input_shape[1], input_shape[0]), device, need_nms=True, nms_thres=0.4)
+    outputs_pred = postprocess_output(hms_pred, whs_pred, offsets_pred, thresh, device)
+    outputs_pred = decode_bbox(outputs_pred, (input_shape[1], input_shape[0]), device, need_nms=True, nms_thres=0.4)
+    images = images.cpu().numpy()
+    for i in range(len(images)):
+        image = images[i]
+        image = recover_input(image.copy())
+        output_true = outputs_true[i]
+        output_pred = outputs_pred[i]
+        if len(output_true) != 0:
+            output_true = output_true.data.cpu().numpy()
+            labels_true = output_true[:, 5]
+            bboxes_true = output_true[:, :4]
+        else:
+            labels_true = []
+            bboxes_true = []
+        
+        if len(output_pred) != 0:
+            output_pred = output_pred.data.cpu().numpy()
+            labels_pred = output_pred[:, 5]
+            bboxes_pred = output_pred[:, :4]
+        else:
+            labels_pred = []
+            bboxes_pred = []
+        
+        image_true = draw_bbox(image, bboxes_true, labels_true, category, show_name=True)
+        image_pred = draw_bbox(image, bboxes_pred, labels_pred, category, show_name=True)
+        summary_images.append(np.hstack((image_true, image_pred)).astype(np.uint8))
+
+    return summary_images
+    

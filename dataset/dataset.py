@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 from PIL import Image, ImageDraw
 from torch.utils.data.dataset import Dataset
-from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize
+from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize, preprocess_input
 
 class UIDataset(Dataset):
     def __init__(self, data_path, category_path, input_shape=(1080, 1080), is_train=True, split_radio=0.8):
@@ -74,6 +74,7 @@ class UIDataset(Dataset):
             # read in bbox and name from .xml file
             coords, names = parse_xml(xml_path)
             image, bbox = image_resize(image, input_shape, np.array(coords))
+            image = preprocess_input(image)
             assert len(coords) == len(names)
             
             # add category index to bbox
