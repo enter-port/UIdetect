@@ -14,7 +14,7 @@ def create_dino_args():
     args.ddetr_lr_param = False
     
     # 训练相关参数
-    args.batch_size = 2
+    args.batch_size = 1
     args.weight_decay = 0.0001
     args.epochs = 12
     args.lr_drop = 11
@@ -164,12 +164,15 @@ def create_dino_args():
     args.lr = 0.0001
     args.lr_backbone = 1e-05
     args.weight_decay = 0.0001
-    args.epochs = 12
+    args.epochs = 1
     args.lr_drop = 11
     args.save_checkpoint_interval = 1
     args.clip_max_norm = 0.1
     args.onecyclelr = False
     args.multi_step_lr = False
     args.lr_drop_list = [33, 45]
+    args.distributed = False # 暂时不适用分布式训练
+    args.input_shape = (1280, 1920) # 输入的图片大小
+    args.wo_class_error = False #分类获取误差
     
     return args

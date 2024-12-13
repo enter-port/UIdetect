@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from torchvision.ops import nms
 from utils.data_utils import recover_input
+import os
 
 def postprocess_output(hms, whs, offsets, confidence, device):
     """
@@ -222,4 +223,125 @@ def get_summary_image(images, input_shape, category, thresh,
         summary_images.append(np.hstack((image_true, image_pred)).astype(np.uint8))
 
     return summary_images
+
+
+# The following tool functions are used for dino training
+# mainly copy-paste from DINO
+    
+import json
+import torch
+import torch.nn as nn
+
+
+def match_name_keywords(n: str, name_keywords: list):
+    out = False
+    for b in name_keywords:
+        if b in n:
+            out = True
+            break
+    return out
+
+
+def get_param_dict(args, model_without_ddp: nn.Module):
+    try:
+        param_dict_type = args.param_dict_type
+    except:
+        param_dict_type = 'default'
+    assert param_dict_type in ['default', 'ddetr_in_mmdet', 'large_wd']
+
+    # by default
+    if param_dict_type == 'default':
+        param_dicts = [
+            {"params": [p for n, p in model_without_ddp.named_parameters() if "backbone" not in n and p.requires_grad]},
+            {
+                "params": [p for n, p in model_without_ddp.named_parameters() if "backbone" in n and p.requires_grad],
+                "lr": args.lr_backbone,
+            }
+        ]
+        return param_dicts
+
+    if param_dict_type == 'ddetr_in_mmdet':
+        param_dicts = [
+            {
+                "params":
+                    [p for n, p in model_without_ddp.named_parameters()
+                        if not match_name_keywords(n, args.lr_backbone_names) and not match_name_keywords(n, args.lr_linear_proj_names) and p.requires_grad],
+                "lr": args.lr,
+            },
+            {
+                "params": [p for n, p in model_without_ddp.named_parameters() 
+                        if match_name_keywords(n, args.lr_backbone_names) and p.requires_grad],
+                "lr": args.lr_backbone,
+            },
+            {
+                "params": [p for n, p in model_without_ddp.named_parameters() 
+                        if match_name_keywords(n, args.lr_linear_proj_names) and p.requires_grad],
+                "lr": args.lr * args.lr_linear_proj_mult,
+            }
+        ]        
+        return param_dicts
+
+    if param_dict_type == 'large_wd':
+        param_dicts = [
+                {
+                    "params":
+                        [p for n, p in model_without_ddp.named_parameters()
+                            if not match_name_keywords(n, ['backbone']) and not match_name_keywords(n, ['norm', 'bias']) and p.requires_grad],
+                },
+                {
+                    "params": [p for n, p in model_without_ddp.named_parameters() 
+                            if match_name_keywords(n, ['backbone']) and match_name_keywords(n, ['norm', 'bias']) and p.requires_grad],
+                    "lr": args.lr_backbone,
+                    "weight_decay": 0.0,
+                },
+                {
+                    "params": [p for n, p in model_without_ddp.named_parameters() 
+                            if match_name_keywords(n, ['backbone']) and not match_name_keywords(n, ['norm', 'bias']) and p.requires_grad],
+                    "lr": args.lr_backbone,
+                    "weight_decay": args.weight_decay,
+                },
+                {
+                    "params":
+                        [p for n, p in model_without_ddp.named_parameters()
+                            if not match_name_keywords(n, ['backbone']) and match_name_keywords(n, ['norm', 'bias']) and p.requires_grad],
+                    "lr": args.lr,
+                    "weight_decay": 0.0,
+                }
+            ]
+
+    return param_dicts
+
+def create_directories(base_path: str, subdirs: list):
+    
+    for subdir in subdirs:
+        dir_path = os.path.join(base_path, subdir)
+        os.makedirs(dir_path, exist_ok=True)
+    return [os.path.join(base_path, subdir) for subdir in subdirs]
+
+
+def save_model(model, epoch, weight_path, optimizer=None):
+    """
+    save params and traning status of the model 
+    """
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+    }
+    if optimizer:
+        checkpoint['optimizer_state_dict'] = optimizer.state_dict()
+    
+    model_filename = f"checkpoint_epoch_{epoch}.pth"
+    torch.save(checkpoint, os.path.join(weight_path, model_filename))
+    
+def to_device(item, device):
+    if isinstance(item, torch.Tensor):
+        return item.to(device)
+    elif isinstance(item, list):
+        return [to_device(i, device) for i in item]
+    elif isinstance(item, dict):
+        return {k: to_device(v, device) for k,v in item.items()}
+    else:
+        raise NotImplementedError("Call Shilong if you use other containers! type: {}".format(type(item)))
+
+
     

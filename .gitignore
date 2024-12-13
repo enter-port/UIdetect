@@ -8,3 +8,7 @@ logs
 eval
 __init__.py
 third_party
+dino_venv/
+data/v1
+data/COCO
+logs/

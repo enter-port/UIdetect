@@ -79,7 +79,7 @@ class UIDataset(Dataset):
             
             # add category index to bbox
             category_indices = np.array([int(self.category.index(name.lower()))+1 for name in names])
-            bbox = np.column_stack((bbox, category_indices))
+            bbox = np.column_stack((bbox, category_indices)) # (nb_num, 5)
             
             self.images.append(image)
             self.bboxes.append(bbox)
@@ -95,9 +95,10 @@ class UIDataset(Dataset):
     def __getitem__(self, idx):
         image = self.images[idx]
         bbox = np.array(self.bboxes[idx])
+        bbox_origin = bbox
         bbox = bbox[:, :4]
-        cat_ids = bbox[:, 4]
-        w, h = image.size
+        cat_ids = bbox_origin[:, 4]
+        w, h = (image.shape)[1:]
 
         bbox = torch.as_tensor(bbox, dtype=torch.float32).reshape(-1, 4)
         x0, y0, x1, y1 = bbox.unbind(-1)
