@@ -8,8 +8,8 @@ Delete contents of distributed GPU training
 import os
 import os.path as osp
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), "./third_party/DINO/models/dino"))
-
+sys.path.append(os.path.join(os.path.dirname(__file__), "./third_party/DINO_UI/models/dino"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "./third_party/DINO_UI"))
 import argparse
 import torch
 import numpy as np
@@ -23,7 +23,7 @@ import time
 from dataset.dino_dataset import UIDataset
 from torch.utils.data import DataLoader
 
-from third_party.DINO.models.dino.dino import build_dino
+from third_party.DINO_UI.models.dino.dino import build_dino
 from utils.arg_utils import create_dino_args
 from utils.train_utils import get_param_dict, create_directories, save_model
 import utils.misc as utils

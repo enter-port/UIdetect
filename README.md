@@ -28,9 +28,12 @@ https://github.com/Runist/torch_CenterNet
 
 建议创建虚拟环境，这里我直接使用的python venv，推荐python版本3.10
 
-#### 创建目录`/third_party`,将DINO的原始仓库下载到该目录下
+#### 复制DINO仓库
 
-`git clone https://github.com/IDEA-Research/DINO.git `
+创建目录`/third_party`,将我们fork的DINO仓库下载到该目录下
+`git clone https://github.com/enter-port/DINO-UI.git `，并将目录名改为DINO_UI
+
+注：我们基于原先的DINO项目进行了一些细微的模型修改以适应我们的项目，所以请务必从我们fork的repo上复制
 
 #### 安装依赖
 
@@ -56,8 +59,6 @@ https://github.com/Runist/torch_CenterNet
 
 ### DINO
 
-在跑train_dino之前可能得修改以下DINO项目模型中的部分数据格式，应该是它自己写的时候没有考虑到，稍后会将我的修改放上来
-
 #### learn_from_sccratch
 ` python3 train_dino.py`
 #### fine-tune
@@ -72,6 +73,8 @@ fine-tune还没写
 ## TODO
 
 1. DINO结果转化为`.xml`
-2. DINO的训练（手上没卡，目前只跑了一个epoch，数据有点怪，可能需要陈神帮忙后续debug）
-3. 运行`eval`得出结果
-4. Grounding DINO and fine-tune(maybe) 
+2. DINO的训练（手上没卡，目前只跑了一个epoch，目前来看数据有点怪，可能需要陈神帮忙后续debug一下train和eval的部分）
+3. 运行`eval`得出结果，使用eval测试现有的两个模型
+4. Grounding DINO测试zero-shot能力
+5. 对于Centernet和DINO finetune（目前我能想到的就是在pre-trained model上面用我们的数据集继续训，改一下训练超参，也不用特别复杂）
+6. 尝试数据增强（Centernet自带的数据增强）
