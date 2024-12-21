@@ -14,31 +14,33 @@ def copy_test_files(json_file_path, base_dir, target_xml_folder, target_png_fold
     # 遍历测试集路径列表
     for path in data.get('test', []):
         full_path = os.path.join(base_dir, path.lstrip('/'))  # 去除开头的斜杠，以防路径问题
-        base_name = os.path.basename(full_path)  # 获取基础名称，例如 "frame_18_17"
         
         # 构建源文件路径
         source_xml = f"{full_path}.xml"
         source_png = f"{full_path}.png"
 
+        # 获取原始的文件名（不修改文件名）
+        original_base_name = os.path.basename(full_path)  # 获取文件名（不含路径）
+        
         # 构建目标文件路径
-        target_xml = os.path.join(target_xml_folder, f"{base_name}.xml")
-        target_png = os.path.join(target_png_folder, f"{base_name}.png")
+        target_xml = os.path.join(target_xml_folder, f"{original_base_name}.xml")
+        target_png = os.path.join(target_png_folder, f"{original_base_name}.png")
 
         # 复制文件到目标文件夹，并处理可能的错误
         try:
             if os.path.exists(source_xml):
                 shutil.copy2(source_xml, target_xml)  # 使用copy2以保留元数据
-                print(f"Copied {base_name}.xml successfully.")
+                print(f"Copied {original_base_name}.xml successfully.")
             else:
                 print(f"Source XML file not found: {source_xml}")
 
             if os.path.exists(source_png):
                 shutil.copy2(source_png, target_png)
-                print(f"Copied {base_name}.png successfully.")
+                print(f"Copied {original_base_name}.png successfully.")
             else:
                 print(f"Source PNG file not found: {source_png}")
         except Exception as e:
-            print(f"An error occurred while copying {base_name} files: {e}")
+            print(f"An error occurred while copying {original_base_name} files: {e}")
 
     print("Process completed.")
 

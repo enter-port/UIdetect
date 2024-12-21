@@ -12,21 +12,22 @@ from model.centernet import CenterNet  # 确保路径正确
 from dataset.dataset import UIDataset
 from torch.utils.data import DataLoader
 
+
 def load_model(checkpoint_path, device, category_path):
     """加载预训练的模型，并尝试从checkpoint或category文件加载类别信息"""
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    
+
     # 如果checkpoint是CenterNet模型实例，则尝试找到类别数量
     if isinstance(checkpoint, CenterNet):
         cls_head = checkpoint.head.cls_head
-        
+
         # 找到最后一层卷积层以确定类别数量
         num_cat = None
         for module in reversed(cls_head):
             if isinstance(module, nn.Conv2d):
                 num_cat = module.out_channels
                 break
-        
+
         if num_cat is None:
             raise ValueError("Could not find Conv2d layer in cls_head to determine number of categories.")
     else:
@@ -41,7 +42,7 @@ def load_model(checkpoint_path, device, category_path):
                 categories.append(cat)
 
     num_cat_from_file = len(categories)
-    if num_cat != num_cat_from_file:
+    if num_cat!= num_cat_from_file:
         print(f"Warning: Mismatch between number of categories in model ({num_cat}) and in file ({num_cat_from_file}). Using file categories.")
         num_cat = num_cat_from_file
 
@@ -53,11 +54,12 @@ def load_model(checkpoint_path, device, category_path):
 
     return model, categories
 
-def convert_predictions_to_boxes(hms_pred, whs_pred, offsets_pred, input_shape, categories):
+
+def convert_predictions_to_boxes(hms_pred, whs_pred, offsets_pred, input_shape, categories,stride=4):
     """Convert model predictions to bounding boxes."""
     boxes = []
-    threshold = 0  # Confidence threshold for detection
-    
+    threshold = 0.0  # Confidence threshold for detection
+
     # Ensure the shapes are correct
     try:
         num_classes, output_height, output_width = hms_pred.shape
@@ -66,9 +68,9 @@ def convert_predictions_to_boxes(hms_pred, whs_pred, offsets_pred, input_shape, 
     except ValueError:
         print(f"Shapes: hms_pred={hms_pred.shape}, whs_pred={whs_pred.shape}, offsets_pred={offsets_pred.shape}")
         raise ValueError("Mismatch in expected dimensions for hms_pred, whs_pred, or offsets_pred.")
-        
-    if (output_height != wh_output_height or output_width != wh_output_width or 
-        output_height != offset_output_height or output_width != offset_output_width):
+
+    if (output_height!= wh_output_height or output_width!= wh_output_width or
+            output_height!= offset_output_height or output_width!= offset_output_width):
         raise ValueError("Mismatch in output dimensions between hms_pred, whs_pred, and offsets_pred.")
 
     print(f"Heatmap shape: {hms_pred.shape}")
@@ -83,49 +85,55 @@ def convert_predictions_to_boxes(hms_pred, whs_pred, offsets_pred, input_shape, 
                 if confidence > threshold:
                     width, height = whs_pred[:, h, w]  # Access width and height
                     offset_x, offset_y = offsets_pred[:, h, w]  # Access offsets
-                    
-                    center_x = w + offset_x
-                    center_y = h + offset_y
-                    
-                    x_min = center_x - width / 2
-                    y_min = center_y - height / 2
-                    x_max = center_x + width / 2
-                    y_max = center_y + height / 2
-                    
+
+                    center_x = int(w + offset_x)*stride
+                    center_y = int(h + offset_y)*stride
+                    width *= stride
+                    height *= stride
+                    x_min = int(center_x - width / 2)
+                    y_min = int(center_y - height / 2)
+                    x_max = int(center_x + width / 2)
+                    y_max = int(center_y + height / 2)
+
                     boxes.append((x_min, y_min, x_max, y_max, confidence, c))
-    
+
     return boxes
 
+
+
 def save_predictions_to_csv(predictions, output_csv, image_names, categories):
-    """将预测结果保存为CSV文件，确保格式符合eval要求"""
-    with open(output_csv, 'w', newline='', encoding='utf-8') as csvfile:
+    """将预测结果保存为CSV文件，确保格式符合eval要求，坐标用空格分隔"""
+    with open(output_csv, 'w', encoding='utf-8', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['image_name', 'predictions'])
-        
+        writer.writerow(['image_name', 'bounding_box', 'confidence', 'class_name'])
+
         for img_name, preds in zip(image_names, predictions):
-            prediction_details = []
             for pred in preds:
                 x_min, y_min, x_max, y_max, confidence, class_idx = pred
                 class_name = categories[class_idx] if class_idx < len(categories) else "unknown"
-                bbox_info = f"{x_min} {y_min} {x_max - x_min} {y_max - y_min} {confidence} {class_name}"
-                prediction_details.append(bbox_info)
-            writer.writerow([img_name, ' '.join(prediction_details)])
+
+                # 将bounding box的坐标以空格分隔
+                bounding_box = f"{x_min} {y_min} {x_max} {y_max}"
+
+                # 写入每个预测框的详细信息
+                writer.writerow([img_name, bounding_box, confidence, class_name])
+
 
 def infer_and_save_results(model, dataloader, output_csv, device, input_shape, categories):
     predictions = []
-    image_names = []
+    image_names = []  # 存储原始图像文件名
 
     model.eval()
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Inferring"):
-            images, batch_hm, batch_wh, batch_offset, batch_offset_mask = batch
+            images, batch_hm, batch_wh, batch_offset, batch_offset_mask, file_names = batch  # 获取文件名
             images = images.float().to(device)
-            
+
             # Get model predictions
             outputs = model(images, mode='inference')
             print("Model outputs shapes:")
             for i, output in enumerate(outputs):
-                print(f"Output {i} shape: {output.shape}")
+                print(f"Output {i} shape: {output.shape})")
 
             # Ensure outputs are numpy arrays and remove batch dimension correctly
             hms_pred, whs_pred, offsets_pred = [output.cpu().numpy()[0] for output in outputs[:3]]
@@ -137,19 +145,22 @@ def infer_and_save_results(model, dataloader, output_csv, device, input_shape, c
                 input_shape,
                 categories
             )
-                
+
             preds = [
                 [x_min, y_min, x_max, y_max, score, class_idx]
                 for x_min, y_min, x_max, y_max, score, class_idx in boxes
             ]
             predictions.append(preds)
 
-            # 注意：这里需要确保你可以从dataloader或batch中获取图像名
-            # 如果不能直接获取，可能需要在dataset中加入这个信息
-            image_name = f"image_{len(image_names)}"  # 使用默认名称，如果无法获取真实名称
-            image_names.append(image_name)
-    
+            # # 使用从数据集中返回的原始文件名
+            # image_names.extend(file_names)  # 添加原始图像文件名
+            for file_name in file_names:
+                # 获取文件的基名，即去掉路径部分，只保留文件名
+                base_name = os.path.basename(file_name)  
+                image_names.append(base_name)  # 添加原始图像文件名（去除目录）
+    # 保存到CSV文件
     save_predictions_to_csv(predictions, output_csv, image_names, categories)
+
 
 if __name__ == "__main__":
     # 设置参数
@@ -168,3 +179,4 @@ if __name__ == "__main__":
 
     # 执行推理并将结果保存到CSV文件
     infer_and_save_results(model, test_loader, output_csv, device, input_shape, categories)
+    
