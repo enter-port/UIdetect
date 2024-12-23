@@ -144,8 +144,8 @@ def create_dino_args():
     args.device = 'cuda'
     args.seed = 42
     args.resume = ''
-    args.pretrain_model_path = None
-    args.finetune_ignore = None
+    args.pretrain_model_path = 'pretrained/checkpoint0011_4scale.pth'
+    args.finetune_ignore = ["backbone", "transformer.encoder", "transformer.decoder" ]
     args.start_epoch = 0
     args.eval = False
     args.num_workers = 10
@@ -174,5 +174,7 @@ def create_dino_args():
     args.distributed = False # 暂时不适用分布式训练
     args.input_shape = (1280, 1920) # 输入的图片大小
     args.wo_class_error = False #分类获取误差
+    args.pre_train = True # 是否加载model zoo中提供的预训练模型
+    args.finetune = False # 是否基于预训练模型FINETUNE
     
     return args

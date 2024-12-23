@@ -14,11 +14,13 @@ import argparse
 import torch
 import numpy as np
 from tqdm import tqdm
-from typing import Iterable
+from typing import Iterable 
 import math
 import random
 from datetime import datetime
 import time
+from collections import OrderedDict
+import json
 
 from dataset.dino_dataset import UIDataset
 from torch.utils.data import DataLoader
@@ -199,7 +201,7 @@ def eval_one_epoch(model, criterion, postprocessors, eval_loader,
                     bbox: Tensor(K, 4)
                     idx: list(len: K)
                 tgt: dict.
-                经过后处理的result['boxes'],代表每个图片中每个框的坐标 [x_min, y_min, x_max, y_max]，且这个坐标是经过翻归一化的
+                经过后处理的result['boxes'],代表每个图片中每个框的坐标 [x_min, y_min, x_max, y_max]，且这个坐标是经过反归一化的原始坐标
                 """
                 # compare gt and res (after postprocess)
                 gt_bbox = tgt['boxes']
@@ -279,7 +281,16 @@ def main():
     param_dicts = get_param_dict(args, model)
     optimizer = torch.optim.AdamW(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
     
-    # set lr_schedular
+    # lr warm-up, used for fine-tuning
+    def lr_lambda(step):
+        warmup_steps = 400
+        if step < warmup_steps:
+            return float(step) / warmup_steps
+        return 1.0  
+    
+    lr_scheduler_warmup = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    
+    # set lr_schedular, the alternative one includes lr warmup
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
     
     # set tensorboard
@@ -290,20 +301,67 @@ def main():
         checkpoint = torch.load(args.frozen_weights, map_location='cpu')
         model.detr.load_state_dict(checkpoint['model'])
         
-    # ignore finetuning and resume temporarily
+    # load model from given path
+    if args.pre_train and args.pretrain_model_path:
+        checkpoint = torch.load(args.pretrain_model_path, map_location='cpu')['model']
+        
+        # # print all the parameters 
+        # print("Listing all parameters in the model instance:")
+        # for name, param in checkpoint.items():
+        #     print(f"Parameter name: {name}, Shape: {param.shape}")
+                
+        # freeze some layers when fine-tunning
+        _ignorekeywordlist = args.finetune_ignore if args.finetune_ignore else []
+        ignorelist = []
+        
+        def check_keep(keyname, ignorekeywordlist):
+            for keyword in ignorekeywordlist:
+                if keyword in keyname:
+                    ignorelist.append(keyname)
+                    return False
+            return True
+        
+        print("Ignore keys: {}".format(json.dumps(ignorelist, indent=2)))
+        
+        # _tmp_st is the keys not frozen in this process
+        _tmp_st = OrderedDict({k:v for k, v in utils.clean_state_dict(checkpoint).items() if check_keep(k, _ignorekeywordlist)})
+        
+        # load the keys not frozen to the model
+        # Here use strict = False since we ignore(frozen) some of the parameters for better fine-tuning
+        _load_output = model.load_state_dict(_tmp_st, strict=False)
+        print(str(_load_output))
+    
+    # TODO：根据postprocessor完成visualization函数
     
     global step
     step = 0
-    
-    # TODO: figure out the format of dataset in DINO
+
     # Here, due to lack of training data, we don't sample on the original dataset
     train_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=args.input_shape, is_train=True)
     test_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=args.input_shape, is_train=False) 
     train_loader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size, num_workers=0, pin_memory=True)
     eval_loader = DataLoader(test_dataset, shuffle=True, batch_size=args.batch_size, num_workers=0, pin_memory=True)
+    
+    # 对现有模型进行测试
+    if args.eval:
+        print("Evaluation the existing model!")
+        # evaluation of this process
+        os.environ['EVAL_FLAG'] = 'TRUE'
+        eval_stats, average_eval_loss, result_dict = eval_one_epoch(
+            model, criterion, postprocessors, eval_loader, 
+            device, current_epoch = 1, wo_class_error=args.wo_class_error, args=args, writer=writer
+        )
+        
+        # Evaluation process provided by TA!
+        
+        # visualization process on first several images
+        
+        print(f'Average evaluation loss of this model:{average_eval_loss}')
+        return
 
     print("Start training")
     start_time = time.time()
+    # 训练及测试框架
     for epoch in range(args.start_epoch, args.epochs):
         epoch_start_time = time.time()
         
@@ -314,6 +372,8 @@ def main():
         )
         
         if not args.onecyclelr:
+            if args.finetune:
+                lr_scheduler_warmup.step()
             lr_scheduler.step()
             
         # evaluation process
