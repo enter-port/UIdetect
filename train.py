@@ -127,7 +127,7 @@ def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, wr
     total_loss = []
     image_write_step = len(train_loader)
 
-    for images, hms_true, whs_true, offsets_true, offset_masks_true in tbar:
+    for images, hms_true, whs_true, offsets_true, offset_masks_true,_ in tbar:
         tbar.set_description("epoch {}".format(epoch))
 
         # Set variables for training
@@ -155,7 +155,7 @@ def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, wr
         total_loss.append(loss.item())
         
         if step % image_write_step == 0:
-            summary_images = get_summary_image(images, input_shape, cat, 0.1,
+            summary_images = get_summary_image(images, input_shape, cat, 0.5,
                                             hms_true, whs_true, offsets_true,
                                             hms_pred, whs_pred, offsets_pred, device)
             for i, summary_image in enumerate(summary_images):
@@ -193,7 +193,7 @@ def eval_one_epochs(model, val_loader, epoch, device, writer, cat, input_shape):
     write_image = True
 
     with torch.no_grad():
-        for images, hms_true, whs_true, offsets_true, offset_masks_true in val_loader:
+        for images, hms_true, whs_true, offsets_true, offset_masks_true,_ in val_loader:
 
             # Set variables for training
             images = images.float().to(device)
@@ -221,7 +221,7 @@ def eval_one_epochs(model, val_loader, epoch, device, writer, cat, input_shape):
             
             if write_image:
                 write_image = False
-                summary_images = get_summary_image(images, input_shape, cat, 0.1,
+                summary_images = get_summary_image(images, input_shape, cat, 0.5,
                                             hms_true, whs_true, offsets_true,
                                             hms_pred, whs_pred, offsets_pred, device)
                 for i, summary_image in enumerate(summary_images):
