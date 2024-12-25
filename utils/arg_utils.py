@@ -4,7 +4,7 @@ def create_dino_args():
     args = argparse.Namespace()
     
     # 基础配置
-    args.num_classes = 91
+    args.num_classes = 10
     args.lr = 0.0001
     args.param_dict_type = 'default'
     args.lr_backbone = 1e-05
@@ -26,6 +26,7 @@ def create_dino_args():
     
     # 模型基础参数
     args.modelname = 'dino'
+    # args.frozen_weights = ['backcone', 'transformer.encoder', 'transformer.decoder']
     args.frozen_weights = None
     args.backbone = 'resnet50'
     args.use_checkpoint = False
@@ -110,7 +111,7 @@ def create_dino_args():
     args.decoder_sa_type = 'sa'
     args.matcher_type = 'HungarianMatcher'
     args.decoder_module_seq = ['sa', 'ca', 'ffn']
-    args.nms_iou_threshold = -1
+    args.nms_iou_threshold = 0.3
     args.dec_pred_bbox_embed_share = True
     args.dec_pred_class_embed_share = True
     
@@ -120,7 +121,7 @@ def create_dino_args():
     args.dn_box_noise_scale = 0.4
     args.dn_label_noise_ratio = 0.5
     args.embed_init_tgt = True
-    args.dn_labelbook_size = 91
+    args.dn_labelbook_size = 11
     args.match_unstable_error = True
     
     # EMA相关参数
@@ -144,8 +145,10 @@ def create_dino_args():
     args.device = 'cuda'
     args.seed = 42
     args.resume = ''
-    args.pretrain_model_path = 'pretrained/checkpoint0011_4scale.pth'
-    args.finetune_ignore = ["backbone", "transformer.encoder", "transformer.decoder" ]
+    # args.pretrain_model_path = 'pretrained/checkpoint0011_4scale.pth'
+    args.pretrain_model_path = None
+    # args.finetune_ignore = ["label_enc.weight", "class_embed"]
+    args.finetune_ignore = None
     args.start_epoch = 0
     args.eval = False
     args.num_workers = 10
@@ -159,7 +162,6 @@ def create_dino_args():
     args.rank = 0
     args.local_rank = None
     args.amp = False
-    args.frozen_weights = None
     args.clip_max_norm = 0.1
     args.lr = 0.0001
     args.lr_backbone = 1e-05
@@ -176,5 +178,5 @@ def create_dino_args():
     args.wo_class_error = False #分类获取误差
     args.pre_train = True # 是否加载model zoo中提供的预训练模型
     args.finetune = False # 是否基于预训练模型FINETUNE
-    
+    args.viz = False # 每一个epoch结束是否可视化一张图像    
     return args

@@ -6,7 +6,6 @@ Delete contents of distributed GPU training
 '''
 # add the model path of DINO into current sys path
 import os
-import os.path as osp
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "./third_party/DINO_UI/models/dino"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "./third_party/DINO_UI"))
@@ -21,13 +20,14 @@ from datetime import datetime
 import time
 from collections import OrderedDict
 import json
+import pickle
 
 from dataset.dino_dataset import UIDataset
 from torch.utils.data import DataLoader
 
 from third_party.DINO_UI.models.dino.dino import build_dino
 from utils.arg_utils import create_dino_args
-from utils.train_utils import get_param_dict, create_directories, save_model
+from utils.train_utils import get_param_dict, create_directories, save_model, visualize_and_save, deprocess_input
 import utils.misc as utils
 
 from tensorboardX import SummaryWriter
@@ -125,16 +125,14 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     for k, v in loss_stats.items():
         loss_stats[k] = sum(v) / len(v)
 
-    # # following are two schedulars for criterions (loss func)
-    # # update criterion weight dict if changed
-    # # weight dacay of loss func
-    # if getattr(criterion, 'loss_weight_decay', False):
-    #     criterion.loss_weight_decay(epoch=epoch)
-    #     for k, v in criterion.weight_dict.items():
-    #         loss_stats[f'weight_{k}'] = v
-    # # fine_tune for loss func
-    # if getattr(criterion, 'tuning_matching', False):
-    #     criterion.tuning_matching(epoch)
+    # following are two schedulars for criterions (loss func)
+    # update criterion weight dict if changed
+
+    if args.finetune:
+        if getattr(criterion, 'loss_weight_decay', False):
+            criterion.loss_weight_decay(epoch=epoch)
+        if getattr(criterion, 'tuning_matching', False):
+            criterion.tuning_matching(epoch)
     
     return loss_stats, np.mean(loss_values)
 
@@ -185,42 +183,44 @@ def eval_one_epoch(model, criterion, postprocessors, eval_loader,
         # post_process procedure
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors['bbox'](outputs, orig_target_sizes) # [scores: [num_of_boxes], labels: [num_of_boxes], boxes: [num_of_boxes, 4]] x B
+        
+        # no mask used in this task, so "segm" can be ignored
         if 'segm' in postprocessors.keys():
             target_sizes = torch.stack([t["size"] for t in targets], dim=0)
             results = postprocessors['segm'](results, outputs, orig_target_sizes, target_sizes)
+            
         res = {target['image_id'].item(): output for target, output in zip(targets, results)}
         
         # put the result in standarized format if needed
-        if args.save_results:
-            for i, (tgt, res) in enumerate(zip(targets, results)):
-                """
-                pred vars:
-                    K: number of bbox pred
-                    score: Tensor(K),
-                    label: list(len: K),
-                    bbox: Tensor(K, 4)
-                    idx: list(len: K)
-                tgt: dict.
-                经过后处理的result['boxes'],代表每个图片中每个框的坐标 [x_min, y_min, x_max, y_max]，且这个坐标是经过反归一化的原始坐标
-                """
-                # compare gt and res (after postprocess)
-                gt_bbox = tgt['boxes']
-                gt_label = tgt['labels']
-                gt_info = torch.cat((gt_bbox, gt_label.unsqueeze(-1)), 1)
-            
-                _res_bbox = res['boxes']
-                _res_prob = res['scores']
-                _res_label = res['labels']
-                res_info = torch.cat((_res_bbox, _res_prob.unsqueeze(-1), _res_label.unsqueeze(-1)), 1)
-                # import ipdb;ipdb.set_trace()
+        for i, (tgt, res) in enumerate(zip(targets, results)):
+            """
+            pred vars:
+                K: number of bbox pred
+                score: Tensor(K),
+                label: list(len: K),
+                bbox: Tensor(K, 4)
+                idx: list(len: K)
+            tgt: dict.
+            经过后处理的result['boxes'],代表每个图片中每个框的坐标 [x_min, y_min, x_max, y_max]，且这个坐标是经过反归一化的原始坐标
+            """
+            # compare gt and res (after postprocess)
+            gt_bbox = tgt['boxes']
+            gt_label = tgt['labels']
+            gt_info = torch.cat((gt_bbox, gt_label.unsqueeze(-1)), 1)
+        
+            _res_bbox = res['boxes']
+            _res_prob = res['scores']
+            _res_label = res['labels']
+            res_info = torch.cat((_res_bbox, _res_prob.unsqueeze(-1), _res_label.unsqueeze(-1)), 1)
+            # import ipdb;ipdb.set_trace()
 
-                if 'gt_info' not in output_state_dict:
-                    output_state_dict['gt_info'] = []
-                output_state_dict['gt_info'].append(gt_info.cpu())
+            if 'gt_info' not in output_state_dict:
+                output_state_dict['gt_info'] = []
+            output_state_dict['gt_info'].append(gt_info.cpu())
 
-                if 'res_info' not in output_state_dict:
-                    output_state_dict['res_info'] = []
-                output_state_dict['res_info'].append(res_info.cpu())
+            if 'res_info' not in output_state_dict:
+                output_state_dict['res_info'] = []
+            output_state_dict['res_info'].append(res_info.cpu())
                 
         # Update the loss stats after each batch
         for k, v in loss_dict.items():
@@ -251,8 +251,8 @@ def main():
     
     # make directories to save models and ouputs in the process of training
     base_log_path = f"./logs/{timestamp}"
-    subdirs = ['weights', 'summary', 'result']
-    weight_path, summary_path, result_path = create_directories(base_log_path, subdirs)
+    subdirs = ['weights', 'summary', 'result', 'vis']
+    weight_path, summary_path, result_path, vis_path = create_directories(base_log_path, subdirs)
 
     # obtain the numbers of categories from .txt file
     category_path = "./data/categories.txt"
@@ -295,33 +295,26 @@ def main():
     
     # set tensorboard
     writer = SummaryWriter(summary_path)
-    
-    # weight_frozen, None by default
-    if args.frozen_weights is not None:
-        checkpoint = torch.load(args.frozen_weights, map_location='cpu')
-        model.detr.load_state_dict(checkpoint['model'])
         
     # load model from given path
     if args.pre_train and args.pretrain_model_path:
         checkpoint = torch.load(args.pretrain_model_path, map_location='cpu')['model']
-        
-        # # print all the parameters 
-        # print("Listing all parameters in the model instance:")
-        # for name, param in checkpoint.items():
-        #     print(f"Parameter name: {name}, Shape: {param.shape}")
                 
-        # freeze some layers when fine-tunning
+        # freeze some weights and ignore some weights when fine-tunning
         _ignorekeywordlist = args.finetune_ignore if args.finetune_ignore else []
-        ignorelist = []
+        _frozenwordlist = args.frozen_weights if args.frozen_weights else []
+        
+        # freeze the ignored parameters
+        for name, param in model.named_parameters():
+            if any(keyword in name for keyword in _frozenwordlist):
+                param.requires_grad = False 
         
         def check_keep(keyname, ignorekeywordlist):
             for keyword in ignorekeywordlist:
                 if keyword in keyname:
-                    ignorelist.append(keyname)
+                    # ignorelist.append(keyname)
                     return False
             return True
-        
-        print("Ignore keys: {}".format(json.dumps(ignorelist, indent=2)))
         
         # _tmp_st is the keys not frozen in this process
         _tmp_st = OrderedDict({k:v for k, v in utils.clean_state_dict(checkpoint).items() if check_keep(k, _ignorekeywordlist)})
@@ -330,8 +323,6 @@ def main():
         # Here use strict = False since we ignore(frozen) some of the parameters for better fine-tuning
         _load_output = model.load_state_dict(_tmp_st, strict=False)
         print(str(_load_output))
-    
-    # TODO：根据postprocessor完成visualization函数
     
     global step
     step = 0
@@ -384,6 +375,19 @@ def main():
         
         # Evaluation process! based on TA's script
         # Maybe use result dict here for evaluation
+        
+        # visualization of the first graph
+        if args.vis:
+            first_image_gt_info = result_dict['gt_info'][0]
+            first_image_res_info = result_dict['res_info'][0]
+            # print("gt info of the first image:", first_image_gt_info)
+            # print("predicted info of the first image:", first_image_res_info)
+            image, target = test_dataset[0] # image: (3,1280, 1960), np.ndarray
+            image_restored = deprocess_input(image)
+            original_shape = (1280, 1960)
+            image_name = f'image_{epoch}'
+            visualize_and_save(image_restored, first_image_gt_info, first_image_res_info, save_dir=vis_path, image_name=image_name, original_size=original_shape)
+        
         print("=> train loss: {:.4f}   val loss: {:.4f}".format(averge_train_loss, average_eval_loss))
             
         # save model after every epoch
@@ -393,8 +397,13 @@ def main():
         epoch_duration = time.time() - epoch_start_time
         print(f"Epoch {epoch} completed in {epoch_duration:.2f}s")
         
+        # save the result dict
+        file_name = f'res_dict_{epoch}.pkl'
+        file_path = os.path.join(result_path, file_name)
         if args.save_results:
-            save_path = osp(result_path, 'results_epoch_{}.pkl'.format(epoch))
+            with open(file_path, 'wb') as f:
+                pickle.dump(result_dict, f)
+            print(f"res_dict has been saved to {file_path}")
         
     total_duration = time.time() - start_time
     print(f"Training completed in {total_duration:.2f}s")    

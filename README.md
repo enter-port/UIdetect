@@ -60,9 +60,21 @@ https://github.com/Runist/torch_CenterNet
 ### DINO
 
 #### learn_from_sccratch
+
+首先需要修改一些arg_utils.py中的参数，最简单的方法是，将args.pretrain_model_path设置为None。
+
+之后，调整args.epochs等超参数，并运行
 ` python3 train_dino.py`
+即可。
 #### fine-tune
-fine-tune还没写
+
+将args.pretrain_model_path设置为你希望使用的本地预训练模型路径。
+
+修改args.finetune_ignore,将其从None设置为["label_enc.weight", "class_embed"]
+
+修改args.frozen_weights,将其从None设置为['backcone', 'transformer.encoder', 'transformer.decoder']
+
+而后，运行` python3 train_dino.py`
 
 ## 目前已完成的
 
