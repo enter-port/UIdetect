@@ -1,12 +1,16 @@
-import xml.etree.ElementTree as ET
-import numpy as np
 import os
-import cv2
-import PIL
-from utils.data_utils import image_resize
+import math
+import torch
+import shutil
+import numpy as np
+import torch.optim as optim
+from tqdm import tqdm
+from datetime import datetime
+from model.centernet import CenterNet
 from dataset.dataset import UIDataset
 from torch.utils.data import DataLoader
-from utils.train_utils import *
+from tensorboardX import SummaryWriter
+from utils.train_utils import get_summary_image
 
 def parse_xml(xml_path, CLASS_NAME):
     '''
@@ -51,60 +55,43 @@ winmediaplayer: 1919 * 1079
 """
 
 
-def main():
-    image = PIL.Image.open("./data/coredraw/frame_1.png")    
-    test_path = "./data/coredraw/frame_1"
-    xml_path = test_path + ".xml"
-    img_path = test_path + ".png"
-    coords, names = parse_xml(xml_path, "FILLING")
-
+def main():   
+    # run on gpu if cuda exists else cpu
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Running on cuda")
+    else:
+        device = torch.device("cpu")
+        print("Running on cpu")
+        
+    # hyper params
+    global step
+    step = 0
+    input_shape = (1280, 1920)  # Please ensure the number you've put here can be devided by 32
+    batch_size = 1
+    init_lr = 1e-3
+    end_lr = 1e-6
+    freeze_epoch = 50
+    unfreeze_epoch = 100
+    
+    # check data for number of classes(categories)
+    # You can change category path here
     category_path = "./data/categories.txt"
     category = []
     with open(category_path, 'r', encoding='utf-8') as file:
         for line in file:
             cat = line.strip()
             category.append(cat)
-
-    """image = np.array(image)
-    image = image[:, :, :3]
-    coords = np.array(coords)
-    category_indices = np.array([int(category.index(name.lower())) for name in names])
-
-    image, bbox = image_resize(image, (960, 1280), coords)
-    bbox = np.column_stack((bbox, category_indices))       
-    draw_image = draw_bbox(image, bbox, range(len(category)), category, show_name=True)
-
-    print(draw_image.shape)"""
-    # cv2.imshow('img', draw_image)
-    # cv2.waitKey()
+    num_cat = len(category)
     
-    input_shape = (1080, 1920)
-
-    test_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=False)
-    test_loader = DataLoader(test_dataset, shuffle=False, batch_size=1, num_workers=2, pin_memory=True)
-
-    device = torch.device("cpu")
-
-    for images, hms_true, whs_true, offsets_true, offset_masks_true in test_loader:
-        outputs_true = postprocess_output(hms_true, whs_true, offsets_true, 0.999, device)
-        outputs_true = decode_bbox(outputs_true, (input_shape[1], input_shape[0]), device, need_nms=True, nms_thres=0.4)
-        images = images.cpu().numpy()
-        for i in range(len(images)):
-            image = images[i]
-
-            output_true = outputs_true[i]
-            if len(output_true) != 0:
-                output_true = output_true.data.cpu().numpy()
-                labels_true = output_true[:, 5]
-                bboxes_true = output_true[:, :4]
-            else:
-                labels_true = []
-                bboxes_true = []
-            
-            image_true = draw_bbox(image, bboxes_true, labels_true, category, show_name=True)
-            cv2.imshow("img", image_true)
-            cv2.waitKey(0)
-        break
+    # get CenterNet model
+    model = CenterNet(backbone="resnet101", num_classes=num_cat)
+    model.to(device)
+    print("Model create successful.")
+    
+    # get train test dataset
+    train_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=True)
+    image, batch_hm, batch_wh, batch_offset, batch_offset_mask, file_name = train_dataset.__getitem__(0)
 
 if __name__  == "__main__":
     main()

@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import os
 import cv2
-
+import random
+from PIL import Image, ImageDraw, ImageEnhance
 
 def parse_csv(csv_path, CLASS_NAME):
     '''
@@ -236,3 +237,89 @@ def recover_input(image):
     image = (image * std + mean) * 255
 
     return image
+
+def data_augmentation(image, bboxes):
+    if random.random() < 0.5:
+        image, bboxes = random_horizontal_flip(image, bboxes)
+    # if random.random() < 0.5:
+    #     image, bboxes = random_vertical_flip(image, bboxes)
+    if random.random() < 0.5:
+        image, bboxes = random_crop(image, bboxes)
+    if random.random() < 0.5:
+        image, bboxes = random_translate(image, bboxes)
+    if random.random() < 0.5:
+        image = Image.fromarray(image)
+        enh_bri = ImageEnhance.Brightness(image)
+        # brightness = [1, 0.5, 1.4]
+        image = enh_bri.enhance(random.uniform(0.6, 1.4))
+        image = np.array(image)
+    if random.random() < 0.5:
+        image = Image.fromarray(image)
+        enh_col = ImageEnhance.Color(image)
+        # color = [0.7, 1.3, 1]
+        image = enh_col.enhance(random.uniform(0.7, 1.3))
+        image = np.array(image)
+    if random.random() < 0.5:
+        image = Image.fromarray(image)
+        enh_con = ImageEnhance.Contrast(image)
+        # contrast = [0.7, 1, 1.3]
+        image = enh_con.enhance(random.uniform(0.7, 1.3))
+        image = np.array(image)
+    if random.random() < 0.5:
+        image = Image.fromarray(image)
+        enh_sha = ImageEnhance.Sharpness(image)
+        # sharpness = [-0.5, 0, 1.0]
+        image = enh_sha.enhance(random.uniform(0, 2.0))
+        image = np.array(image)
+    return image, bboxes
+
+def random_horizontal_flip(image, bboxes):
+    _, w, _ = image.shape
+    image = image[:, ::-1, :]
+    image = np.array(image)
+    if bboxes.size != 0:
+        bboxes[:, [0, 2]] = w - bboxes[:, [2, 0]]
+    return image, bboxes
+
+def random_vertical_flip(image, bboxes):
+    h, _, _ = image.shape
+    image = image[::-1, :, :]
+    image = np.array(image)
+    if bboxes.size != 0:
+        bboxes[:, [1, 3]] = h - bboxes[:, [3, 1]]
+    return image, bboxes
+
+def random_crop(image, bboxes):
+    if bboxes.size == 0:
+        return image, bboxes
+    h, w, _ = image.shape
+    max_bbox = np.concatenate([np.min(bboxes[:, 0:2], axis=0), np.max(bboxes[:, 2:4], axis=0)], axis=-1)
+    max_l_trans = max_bbox[0]
+    max_u_trans = max_bbox[1]
+    max_r_trans = w - max_bbox[2]
+    max_d_trans = h - max_bbox[3]
+    crop_xmin = max(0, int(max_bbox[0] - random.uniform(0, max_l_trans)))
+    crop_ymin = max(0, int(max_bbox[1] - random.uniform(0, max_u_trans)))
+    crop_xmax = min(w, int(max_bbox[2] + random.uniform(0, max_r_trans)))
+    crop_ymax = min(h, int(max_bbox[3] + random.uniform(0, max_d_trans)))
+    image = image[crop_ymin: crop_ymax, crop_xmin: crop_xmax]
+    bboxes[:, [0, 2]] = bboxes[:, [0, 2]] - crop_xmin
+    bboxes[:, [1, 3]] = bboxes[:, [1, 3]] - crop_ymin
+    return image, bboxes
+
+def random_translate(image, bboxes):
+    if bboxes.size == 0:
+        return image, bboxes
+    h, w, _ = image.shape
+    max_bbox = np.concatenate([np.min(bboxes[:, 0:2], axis=0), np.max(bboxes[:, 2:4], axis=0)], axis=-1)
+    max_l_trans = max_bbox[0]
+    max_u_trans = max_bbox[1]
+    max_r_trans = w - max_bbox[2]
+    max_d_trans = h - max_bbox[3]
+    tx = random.uniform(-(max_l_trans - 1), (max_r_trans - 1))
+    ty = random.uniform(-(max_u_trans - 1), (max_d_trans - 1))
+    M = np.array([[1, 0, tx], [0, 1, ty]])
+    image = cv2.warpAffine(image, M, (w, h), borderValue=(128, 128, 128))
+    bboxes[:, [0, 2]] = bboxes[:, [0, 2]] + tx
+    bboxes[:, [1, 3]] = bboxes[:, [1, 3]] + ty
+    return image, bboxes

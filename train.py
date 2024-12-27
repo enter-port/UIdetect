@@ -1,5 +1,6 @@
 import os
 import math
+import json
 import torch
 import shutil
 import numpy as np
@@ -261,10 +262,22 @@ def main():
     step = 0
     input_shape = (1280, 1920)  # Please ensure the number you've put here can be devided by 32
     batch_size = 1
-    init_lr = 1e-3
-    end_lr = 1e-6
+    init_lr = 1e-4
+    end_lr = 1e-9
     freeze_epoch = 50
     unfreeze_epoch = 100
+    
+    # write hyper params to .json file
+    hyper_params = {
+        "input_shape": input_shape,
+        "batch_size": batch_size,
+        "init_lr": init_lr,
+        "end_lr": end_lr,
+        "freeze_epoch": freeze_epoch,
+        "unfreeze_epoch": unfreeze_epoch
+    }
+    with open("{}/hyper_params.json".format(summary_path), 'w') as f:
+        json.dump(hyper_params, f, indent=4)
     
     # check data for number of classes(categories)
     # You can change category path here

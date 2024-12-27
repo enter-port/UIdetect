@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 from PIL import Image, ImageDraw
 from torch.utils.data.dataset import Dataset
-from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize, preprocess_input
+from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize, preprocess_input, data_augmentation
 
 class UIDataset(Dataset):
     def __init__(self, data_path, category_path, input_shape=(1080, 1080), is_train=True, split_radio=0.8):
@@ -74,6 +74,16 @@ class UIDataset(Dataset):
             
             # 读取 .xml 文件中的边界框和类别
             coords, names = parse_xml(xml_path)
+            if is_train:
+                image_aug, coords_aug = data_augmentation(image, np.array(coords))     
+                image_aug, bbox_aug = image_resize(image_aug, input_shape, coords_aug)
+                image_aug = preprocess_input(image_aug)
+                category_indices = np.array([int(self.category.index(name.lower())) for name in names])
+                bbox_aug = np.column_stack((bbox_aug, category_indices))
+                self.images.append(image_aug)
+                self.bboxes.append(bbox_aug)
+                self.file_names.append(name + "_aug.png")
+                       
             image, bbox = image_resize(image, input_shape, np.array(coords))
             image = preprocess_input(image)
             assert len(coords) == len(names)
@@ -88,7 +98,6 @@ class UIDataset(Dataset):
             
         self.length = len(self.images)
         assert len(self.images) == len(self.bboxes)
-        assert len(self.images) == len(data_names)
         print("{} Dataset Initialize Done. {} objects in total.".format("Train" if is_train else "Test", self.length))
         
     def __len__(self):
@@ -103,9 +112,6 @@ class UIDataset(Dataset):
         
         image = self.images[idx]
         bbox = np.array(self.bboxes[idx])
-        
-        if self.is_train:  
-            image, bbox = self.data_augmentation(image, bbox)
         
         labels = np.array(bbox[:, -1])
         bbox = np.array(bbox[:, :-1])
@@ -147,112 +153,5 @@ class UIDataset(Dataset):
         
         return image, batch_hm, batch_wh, batch_offset, batch_offset_mask, file_name
     
-    def data_augmentation(self, image, bboxes):
-        if random.random() < 0.5:
-            image, bboxes = self.random_horizontal_flip(image, bboxes)
-        # if random.random() < 0.5:
-        #     image, bboxes = self.random_vertical_flip(image, bboxes)
-        if random.random() < 0.5:
-            image, bboxes = self.random_crop(image, bboxes)
-        if random.random() < 0.5:
-            image, bboxes = self.random_translate(image, bboxes)
-
-        if random.random() < 0.5:
-            image = Image.fromarray(image)
-            enh_bri = ImageEnhance.Brightness(image)
-            # brightness = [1, 0.5, 1.4]
-            image = enh_bri.enhance(random.uniform(0.6, 1.4))
-            image = np.array(image)
-
-        if random.random() < 0.5:
-            image = Image.fromarray(image)
-            enh_col = ImageEnhance.Color(image)
-            # color = [0.7, 1.3, 1]
-            image = enh_col.enhance(random.uniform(0.7, 1.3))
-            image = np.array(image)
-
-        if random.random() < 0.5:
-            image = Image.fromarray(image)
-            enh_con = ImageEnhance.Contrast(image)
-            # contrast = [0.7, 1, 1.3]
-            image = enh_con.enhance(random.uniform(0.7, 1.3))
-            image = np.array(image)
-
-        if random.random() < 0.5:
-            image = Image.fromarray(image)
-            enh_sha = ImageEnhance.Sharpness(image)
-            # sharpness = [-0.5, 0, 1.0]
-            image = enh_sha.enhance(random.uniform(0, 2.0))
-            image = np.array(image)
-
-        return image, bboxes
-
-    def random_horizontal_flip(self, image, bboxes):
-        _, w, _ = image.shape
-        image = image[:, ::-1, :]
-        image = np.array(image)
-
-        if bboxes.size != 0:
-            bboxes[:, [0, 2]] = w - bboxes[:, [2, 0]]
-
-        return image, bboxes
-
-    def random_vertical_flip(self, image, bboxes):
-        h, _, _ = image.shape
-        image = image[::-1, :, :]
-        image = np.array(image)
-
-        if bboxes.size != 0:
-            bboxes[:, [1, 3]] = h - bboxes[:, [3, 1]]
-
-        return image, bboxes
-
-    def random_crop(self, image, bboxes):
-        if bboxes.size == 0:
-            return image, bboxes
-
-        h, w, _ = image.shape
-
-        max_bbox = np.concatenate([np.min(bboxes[:, 0:2], axis=0), np.max(bboxes[:, 2:4], axis=0)], axis=-1)
-
-        max_l_trans = max_bbox[0]
-        max_u_trans = max_bbox[1]
-        max_r_trans = w - max_bbox[2]
-        max_d_trans = h - max_bbox[3]
-
-        crop_xmin = max(0, int(max_bbox[0] - random.uniform(0, max_l_trans)))
-        crop_ymin = max(0, int(max_bbox[1] - random.uniform(0, max_u_trans)))
-        crop_xmax = min(w, int(max_bbox[2] + random.uniform(0, max_r_trans)))
-        crop_ymax = min(h, int(max_bbox[3] + random.uniform(0, max_d_trans)))
-
-        image = image[crop_ymin: crop_ymax, crop_xmin: crop_xmax]
-
-        bboxes[:, [0, 2]] = bboxes[:, [0, 2]] - crop_xmin
-        bboxes[:, [1, 3]] = bboxes[:, [1, 3]] - crop_ymin
-
-        return image, bboxes
-
-    def random_translate(self, image, bboxes):
-        if bboxes.size == 0:
-            return image, bboxes
-
-        h, w, _ = image.shape
-
-        max_bbox = np.concatenate([np.min(bboxes[:, 0:2], axis=0), np.max(bboxes[:, 2:4], axis=0)], axis=-1)
-        max_l_trans = max_bbox[0]
-        max_u_trans = max_bbox[1]
-        max_r_trans = w - max_bbox[2]
-        max_d_trans = h - max_bbox[3]
-
-        tx = random.uniform(-(max_l_trans - 1), (max_r_trans - 1))
-        ty = random.uniform(-(max_u_trans - 1), (max_d_trans - 1))
-
-        M = np.array([[1, 0, tx], [0, 1, ty]])
-        image = cv.warpAffine(image, M, (w, h), borderValue=(128, 128, 128))
-
-        bboxes[:, [0, 2]] = bboxes[:, [0, 2]] + tx
-        bboxes[:, [1, 3]] = bboxes[:, [1, 3]] + ty
-
-        return image, bboxes
 
         
