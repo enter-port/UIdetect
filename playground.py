@@ -4,9 +4,10 @@ import os
 import cv2
 import PIL
 from utils.data_utils import image_resize
-from dataset.dataset import UIDataset
+from dataset.dino_dataset import UIDataset
 from torch.utils.data import DataLoader
 from utils.train_utils import *
+from tqdm import tqdm
 
 def parse_xml(xml_path, CLASS_NAME):
     '''
@@ -84,27 +85,36 @@ def main():
     test_loader = DataLoader(test_dataset, shuffle=False, batch_size=1, num_workers=2, pin_memory=True)
 
     device = torch.device("cpu")
+    
+    tbar = tqdm(test_loader)
+    
+    for samples, targets in tbar:
+        # print(targets)    
+        samples = samples.to(device)
+        # targets is a list a dict: (batch_size * len(dict))
+        # targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        batch_size = 1
+        targets = [{k: v[i].to(device) for k, v in targets.items()} for i in range(batch_size)]
+    # for images, hms_true, whs_true, offsets_true, offset_masks_true in test_loader:
+    #     outputs_true = postprocess_output(hms_true, whs_true, offsets_true, 0.999, device)
+    #     outputs_true = decode_bbox(outputs_true, (input_shape[1], input_shape[0]), device, need_nms=True, nms_thres=0.4)
+    #     images = images.cpu().numpy()
+    #     for i in range(len(images)):
+    #         image = images[i]
 
-    for images, hms_true, whs_true, offsets_true, offset_masks_true in test_loader:
-        outputs_true = postprocess_output(hms_true, whs_true, offsets_true, 0.999, device)
-        outputs_true = decode_bbox(outputs_true, (input_shape[1], input_shape[0]), device, need_nms=True, nms_thres=0.4)
-        images = images.cpu().numpy()
-        for i in range(len(images)):
-            image = images[i]
-
-            output_true = outputs_true[i]
-            if len(output_true) != 0:
-                output_true = output_true.data.cpu().numpy()
-                labels_true = output_true[:, 5]
-                bboxes_true = output_true[:, :4]
-            else:
-                labels_true = []
-                bboxes_true = []
+    #         output_true = outputs_true[i]
+    #         if len(output_true) != 0:
+    #             output_true = output_true.data.cpu().numpy()
+    #             labels_true = output_true[:, 5]
+    #             bboxes_true = output_true[:, :4]
+    #         else:
+    #             labels_true = []
+    #             bboxes_true = []
             
-            image_true = draw_bbox(image, bboxes_true, labels_true, category, show_name=True)
-            cv2.imshow("img", image_true)
-            cv2.waitKey(0)
-        break
+    #         # image_true = draw_bbox(image, bboxes_true, labels_true, category, show_name=True)
+    #         # cv2.imshow("img", image_true)
+    #         # cv2.waitKey(0)
+    #     break
 
 if __name__  == "__main__":
     main()
