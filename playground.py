@@ -1,9 +1,11 @@
 import os
+import cv2
 import math
 import torch
 import shutil
 import numpy as np
 import torch.optim as optim
+import xml.etree.ElementTree as ET
 from tqdm import tqdm
 from datetime import datetime
 from model.centernet import CenterNet
@@ -11,6 +13,7 @@ from dataset.dataset import UIDataset
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 from utils.train_utils import get_summary_image
+from utils.data_utils import image_resize
 
 def parse_xml(xml_path, CLASS_NAME):
     '''
@@ -54,44 +57,28 @@ skype: 3120 * 2080
 winmediaplayer: 1919 * 1079
 """
 
+def show_bbox(image, coords, names):
+    image, coords = image_resize(image, (1080, 1920), np.array(coords))
+    for i in range(len(coords)):
+        x_min, y_min, x_max, y_max = coords[i]
+        cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+        cv2.putText(image, names[i], (x_min, y_min), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    cv2.imshow("image", image)
+    cv2.waitKey(0)
+
 
 def main():   
-    # run on gpu if cuda exists else cpu
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        print("Running on cuda")
-    else:
-        device = torch.device("cpu")
-        print("Running on cpu")
-        
-    # hyper params
-    global step
-    step = 0
-    input_shape = (1280, 1920)  # Please ensure the number you've put here can be devided by 32
-    batch_size = 1
-    init_lr = 1e-3
-    end_lr = 1e-6
-    freeze_epoch = 50
-    unfreeze_epoch = 100
-    
-    # check data for number of classes(categories)
-    # You can change category path here
-    category_path = "./data/categories.txt"
-    category = []
-    with open(category_path, 'r', encoding='utf-8') as file:
-        for line in file:
-            cat = line.strip()
-            category.append(cat)
-    num_cat = len(category)
-    
-    # get CenterNet model
-    model = CenterNet(backbone="resnet101", num_classes=num_cat)
-    model.to(device)
-    print("Model create successful.")
-    
-    # get train test dataset
-    train_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=True)
-    image, batch_hm, batch_wh, batch_offset, batch_offset_mask, file_name = train_dataset.__getitem__(0)
+    data_path = "./data"
+    for root, dirs, files in os.walk(data_path):
+        for file in files:
+            if file.endswith(".xml"):
+                xml_path = os.path.join(root, file)
+                coords, names = parse_xml(xml_path, CLASS_NAME=None)
+                if 'level_1' in names:
+                    img_path = xml_path.replace(".xml", ".png")
+                    if os.path.exists(img_path):
+                        image = cv2.imread(img_path)
+                        show_bbox(image, coords, names)
 
 if __name__  == "__main__":
     main()

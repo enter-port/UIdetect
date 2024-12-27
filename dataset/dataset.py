@@ -74,7 +74,7 @@ class UIDataset(Dataset):
             
             # 读取 .xml 文件中的边界框和类别
             coords, names = parse_xml(xml_path)
-            if is_train:
+            """if is_train:
                 image_aug, coords_aug = data_augmentation(image, np.array(coords))     
                 image_aug, bbox_aug = image_resize(image_aug, input_shape, coords_aug)
                 image_aug = preprocess_input(image_aug)
@@ -82,7 +82,7 @@ class UIDataset(Dataset):
                 bbox_aug = np.column_stack((bbox_aug, category_indices))
                 self.images.append(image_aug)
                 self.bboxes.append(bbox_aug)
-                self.file_names.append(name + "_aug.png")
+                self.file_names.append(name + "_aug.png")"""
                        
             image, bbox = image_resize(image, input_shape, np.array(coords))
             image = preprocess_input(image)
