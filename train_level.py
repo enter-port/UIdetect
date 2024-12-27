@@ -128,7 +128,7 @@ def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, wr
     total_loss = []
     image_write_step = len(train_loader)
 
-    for images, hms_true, whs_true, offsets_true, offset_masks_true,_ in tbar:
+    for images, hms_true, whs_true, offsets_true, offset_masks_true, _ in tbar:
         tbar.set_description("epoch {}".format(epoch))
 
         # Set variables for training
@@ -262,10 +262,12 @@ def main():
     step = 0
     input_shape = (1280, 1920)  # Please ensure the number you've put here can be devided by 32
     batch_size = 1
-    init_lr = 1e-4
-    end_lr = 1e-9
-    freeze_epoch = 50
+    init_lr = 5e-3
+    end_lr = 1e-5
+    freeze_epoch = 0
     unfreeze_epoch = 100
+    target = "level"
+    data_path = "./data"
     
     # write hyper params to .json file
     hyper_params = {
@@ -274,31 +276,24 @@ def main():
         "init_lr": init_lr,
         "end_lr": end_lr,
         "freeze_epoch": freeze_epoch,
-        "unfreeze_epoch": unfreeze_epoch
+        "unfreeze_epoch": unfreeze_epoch,
+        "target": target
     }
     with open("{}/hyper_params.json".format(summary_path), 'w') as f:
         json.dump(hyper_params, f, indent=4)
-    
-    # check data for number of classes(categories)
-    # You can change category path here
-    category_path = "./data/categories.txt"
-    category = []
-    with open(category_path, 'r', encoding='utf-8') as file:
-        for line in file:
-            cat = line.strip()
-            category.append(cat)
-    num_cat = len(category)
-    
+
     # get CenterNet model
+    num_cat = 4 if target == "class" else 3
+    category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["level_0", "level_1", "level_2"]
     model = CenterNet(backbone="resnet101", num_classes=num_cat)
     model.to(device)
     print("Model create successful.")
     
     # get train test dataset
-    train_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=True)
-    test_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=False) 
-    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size, num_workers=0, pin_memory=True)
-    test_loader = DataLoader(test_dataset, shuffle=True, batch_size=batch_size, num_workers=0, pin_memory=True)
+    train_dataset = UIDataset(data_path, input_shape=input_shape, is_train=True, target=target)  
+    test_dataset = UIDataset(data_path, input_shape=input_shape, is_train=False, target=target)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)  
     writer = SummaryWriter(summary_path)
     
     freeze_step = len(train_dataset) // batch_size

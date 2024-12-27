@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from torchvision.ops import nms
 from utils.data_utils import recover_input
+import os
 
 def postprocess_output(hms, whs, offsets, confidence, device):
     """
@@ -38,6 +39,12 @@ def postprocess_output(hms, whs, offsets, confidence, device):
         # torch.max[1] index of max value
         score, label = torch.max(heat_map, dim=-1)
         mask = score > confidence
+        
+        # here if elements in mask < 5 choose top five score and corresponding mask
+        if mask.sum() < 5:
+            topk_score, topk_index = torch.topk(score, 10)
+            mask = torch.zeros_like(mask)
+            mask[topk_index] = 1 
 
         # Choose height, width and offset by confidence mask
         wh_mask = wh[mask]
@@ -222,4 +229,40 @@ def get_summary_image(images, input_shape, category, thresh,
         summary_images.append(np.hstack((image_true, image_pred)).astype(np.uint8))
 
     return summary_images
+
+def get_image(images, input_shape, category, thresh, hms, whs, offsets, device):
+    outputs = postprocess_output(hms, whs, offsets, thresh, device)
+    outputs = decode_bbox(outputs, (input_shape[1], input_shape[0]), device, need_nms=True, nms_thres=0.4)
+    images = images.cpu().numpy()
+    image = recover_input(images[0].copy())
+    if len(outputs) != 0:
+        outputs = outputs[0].data.cpu().numpy()
+        labels = outputs[:, 5]
+        bboxes = outputs[:, :4]
+    else:
+        labels = []
+        bboxes = []
+
+    return draw_bbox(image, bboxes, labels, category, show_name=True)
+
+def remove_dir_and_create_dir(dir_name, is_remove=True):
+    """
+    Make new folder, if this folder exist, we will remove it and create a new folder.
+    Args:
+        dir_name: path of folder
+        is_remove: if true, it will remove old folder and create new folder
+
+    Returns: None
+
+    """
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+        print(dir_name, "create.")
+    else:
+        if is_remove:
+            shutil.rmtree(dir_name)
+            os.makedirs(dir_name)
+            print(dir_name, "create.")
+        else:
+            print(dir_name, "is exist.")
     

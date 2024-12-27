@@ -5,6 +5,7 @@ import pandas as pd
 import os
 import cv2
 import random
+import math
 from PIL import Image, ImageDraw, ImageEnhance
 
 def parse_csv(csv_path, CLASS_NAME):
@@ -193,7 +194,7 @@ def draw_gaussian(heatmap, center, radius, k=1):
 
     return heatmap
 
-def image_resize(image, target_size, gt_boxes=None):
+def image_resize(image, target_size, gt_boxes=None, pre_gt_boxes=None):
     ih, iw = target_size
 
     h, w = image.shape[:2]
@@ -207,12 +208,18 @@ def image_resize(image, target_size, gt_boxes=None):
                                       dw, dw if (iw-nw)%2==0 else dw+1, 
                                       cv2.BORDER_CONSTANT, value=(128, 128, 128))
     assert image_padded.shape[:2] == target_size
-    if gt_boxes is None:
+    if gt_boxes is None and pre_gt_boxes is None:
         return image_padded
-    else:
+    elif pre_gt_boxes is None:
         gt_boxes[:, [0, 2]] = gt_boxes[:, [0, 2]] * scale + dw
         gt_boxes[:, [1, 3]] = gt_boxes[:, [1, 3]] * scale + dh
         return image_padded, gt_boxes
+    else:   
+        gt_boxes[:, [0, 2]] = gt_boxes[:, [0, 2]] * scale + dw
+        gt_boxes[:, [1, 3]] = gt_boxes[:, [1, 3]] * scale + dh
+        pre_gt_boxes[:, [0, 2]] = pre_gt_boxes[:, [0, 2]] * scale + dw
+        pre_gt_boxes[:, [1, 3]] = pre_gt_boxes[:, [1, 3]] * scale + dh
+        return image_padded, gt_boxes, pre_gt_boxes
     
 def preprocess_input(image):
     mean = [0.40789655, 0.44719303, 0.47026116]
@@ -236,7 +243,7 @@ def recover_input(image):
     image = np.transpose(image, (1, 2, 0))
     image = (image * std + mean) * 255
 
-    return image
+    return image.astype(np.uint8)
 
 def data_augmentation(image, bboxes):
     if random.random() < 0.5:
@@ -323,3 +330,40 @@ def random_translate(image, bboxes):
     bboxes[:, [0, 2]] = bboxes[:, [0, 2]] + tx
     bboxes[:, [1, 3]] = bboxes[:, [1, 3]] + ty
     return image, bboxes
+
+def cal_feature(image, bbox_with_label, output_shape, num_cat, stride):
+    batch_hm = np.zeros((output_shape[0], output_shape[1], num_cat), dtype=np.float32) 
+    batch_wh = np.zeros((output_shape[0], output_shape[1], 2), dtype=np.float32)
+    batch_offset = np.zeros((output_shape[0], output_shape[1], 2), dtype=np.float32)
+    batch_offset_mask = np.zeros((output_shape[0], output_shape[1]), dtype=np.float32)
+        
+    labels = np.array(bbox_with_label[:, -1])
+    bbox = np.array(bbox_with_label[:, :-1])
+    
+    if len(bbox) != 0:
+        labels = np.array(labels, dtype=np.float32)
+        bbox = np.array(bbox[:, :4], dtype=np.float32)
+        bbox[:, [0, 2]] = np.clip(bbox[:, [0, 2]] / stride, a_min=0, a_max=output_shape[1])
+        bbox[:, [1, 3]] = np.clip(bbox[:, [1, 3]] / stride, a_min=0, a_max=output_shape[0])
+    
+    for i in range(len(labels)):
+        x1, y1, x2, y2 = bbox[i]
+        cls_id = int(labels[i])
+        
+        h, w = y2 - y1, x2 - x1
+        if h > 0 and w > 0:
+            radius = gaussian_radius((math.ceil(h), math.ceil(w)))
+            radius = max(0, int(radius))
+            
+            ct = np.array([(x1 + x2) / 2, (y1 + y2) / 2], dtype=np.float32)
+            ct_int = ct.astype(np.int32)
+            
+            batch_hm[:, :, cls_id] = draw_gaussian(batch_hm[:, :, cls_id], ct_int, radius)
+            
+            batch_wh[ct_int[1], ct_int[0]] = 1. * w, 1. * h
+
+            batch_offset[ct_int[1], ct_int[0]] = ct - ct_int
+
+            batch_offset_mask[ct_int[1], ct_int[0]] = 1
+            
+    return batch_hm, batch_wh, batch_offset, batch_offset_mask

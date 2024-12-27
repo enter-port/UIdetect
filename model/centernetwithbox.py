@@ -74,10 +74,10 @@ class CenterBoxNet(nn.Module):
     def forward(self, x, **kwargs):
         x = self.backbone(x)
         x = self.decoder(x)
-        
-        hms_pre, whs_pre, offsets_pre = kwargs.get('pre_box_data')
-        box = self.box(hms_pre, whs_pre, offsets_pre)
-        x = self.merge(x, box)
+        if kwargs.get('mode') == "train":
+            hms_pre, whs_pre, offsets_pre = kwargs.get('pre_box_data')
+            box = self.box(hms_pre, whs_pre, offsets_pre)
+            x = self.merge(x, box)
         
         hms_pred, whs_pred, offsets_pred = self.head(x)
 

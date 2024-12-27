@@ -8,10 +8,10 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 from PIL import Image, ImageDraw
 from torch.utils.data.dataset import Dataset
-from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize, preprocess_input, data_augmentation
+from utils.data_utils import parse_xml, gaussian_radius, draw_gaussian, image_resize, preprocess_input, data_augmentation, cal_feature
 
 class UIDataset(Dataset):
-    def __init__(self, data_path, category_path, input_shape=(1080, 1080), is_train=True, split_radio=0.8, target="class"):
+    def __init__(self, data_path, input_shape=(1080, 1080), is_train=True, split_radio=0.8, target="class"):
         super(UIDataset, self).__init__()
         self.stride = 4
         self.input_shape = input_shape
@@ -19,7 +19,7 @@ class UIDataset(Dataset):
         self.is_train = is_train
         
         self.target = target
-        self.category =["clickable", "selectable", "scrollable", "disable"] if target == "class" else ["level_0", "level_1", "level_2"]
+        self.category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["level_0", "level_1", "level_2"]
         self.num_cat = len(self.category)
         
         if not os.path.exists(data_path + "/train_test_split.json"):
@@ -54,15 +54,17 @@ class UIDataset(Dataset):
         self.images = []
         self.bboxes = []
         self.file_names = [] 
+        if self.target == "class":
+            self.pboxes = []
         
         pbar = tqdm(data_names)
         for name in pbar:
             img_path = data_path + name + ".png"
             xml_path = data_path + name + ".xml"
+            pre_path = data_path + name + ".json"
         
             image = Image.open(img_path)
             image = np.array(image)[:, :, :3]
-            
             coords, names = parse_xml(xml_path)
 
             root_coords = None
@@ -72,9 +74,9 @@ class UIDataset(Dataset):
             for coord, name in zip(coords, names):
                 if name.lower() == "root":
                     root_coords = coord
-                elif name.lower() in targets:
+                elif name.lower() in self.category:
                     new_coords.append(coord)
-                    new_names.append(name)
+                    new_names.append(name.lower())
             
             if root_coords is not None:
                 x0, y0, x1, y1 = root_coords
@@ -87,19 +89,49 @@ class UIDataset(Dataset):
                         new_coords[i][2] - x0,
                         new_coords[i][3] - y0
                     ]
-                    
+                
+                if self.target == "class":
+                    with open(pre_path, 'r') as f:
+                        pre_bboxes = json.load(f)
+                    for i in range(len(pre_bboxes)):
+                        pre_bboxes[i] = [
+                            pre_bboxes[i][0] - x0,
+                            pre_bboxes[i][1] - y0,
+                            pre_bboxes[i][2] - x0,
+                            pre_bboxes[i][3] - y0
+                        ]
+                        
             coords = new_coords
             names = new_names
+            
+            if names == []:
+                continue
                        
-            image, bbox = image_resize(image, input_shape, np.array(coords))
-            image = preprocess_input(image)
-            assert len(coords) == len(names)
+            if self.target == "class":
+                image, bbox, pbbox = image_resize(image, input_shape, np.array(coords), np.array(pre_bboxes))
+                image = preprocess_input(image)
+                
+                category_indices = np.array([int(self.category.index(name.lower())) for name in names])
+                bbox = np.column_stack((bbox, category_indices))
+                
+                pre_category_indices = np.array([0 for _ in range(len(pbbox))])
+                pbbox = np.column_stack((pbbox, pre_category_indices))
+                
+                self.images.append(image)
+                self.bboxes.append(bbox)
+                self.pboxes.append(pbbox)
             
-            category_indices = np.array([int(self.category.index(name.lower())) for name in names])
-            bbox = np.column_stack((bbox, category_indices))
-            
-            self.images.append(image)
-            self.bboxes.append(bbox)
+            else:
+                image, bbox = image_resize(image, input_shape, np.array(coords))
+                image = preprocess_input(image)
+                assert len(coords) == len(names)
+                
+                category_indices = np.array([int(self.category.index(name.lower())) for name in names])
+                bbox = np.column_stack((bbox, category_indices))
+                
+                self.images.append(image)
+                self.bboxes.append(bbox)
+                
             self.file_names.append(name + ".png") 
             
         self.length = len(self.images)
@@ -109,47 +141,19 @@ class UIDataset(Dataset):
     def __len__(self):
         return self.length
     
-    def __getitem__(self, idx):
-        batch_hm = np.zeros((self.output_shape[0], self.output_shape[1], self.num_cat), dtype=np.float32) 
-        batch_wh = np.zeros((self.output_shape[0], self.output_shape[1], 2), dtype=np.float32)
-        batch_offset = np.zeros((self.output_shape[0], self.output_shape[1], 2), dtype=np.float32)
-        batch_offset_mask = np.zeros((self.output_shape[0], self.output_shape[1]), dtype=np.float32)
-        
+    def __getitem__(self, idx):        
         image = self.images[idx]
         bbox = np.array(self.bboxes[idx])
+        file_name = self.file_names[idx]
         
-        labels = np.array(bbox[:, -1])
-        bbox = np.array(bbox[:, :-1])
+        batch_hm, batch_wh, batch_offset, batch_offset_mask = cal_feature(image, bbox, self.output_shape, self.num_cat, self.stride)
         
-        if len(bbox) != 0:
-            labels = np.array(labels, dtype=np.float32)
-            bbox = np.array(bbox[:, :4], dtype=np.float32)
-            bbox[:, [0, 2]] = np.clip(bbox[:, [0, 2]] / self.stride, a_min=0, a_max=self.output_shape[1])
-            bbox[:, [1, 3]] = np.clip(bbox[:, [1, 3]] / self.stride, a_min=0, a_max=self.output_shape[0])
-        
-        for i in range(len(labels)):
-            x1, y1, x2, y2 = bbox[i]
-            cls_id = int(labels[i])
-            
-            h, w = y2 - y1, x2 - x1
-            if h > 0 and w > 0:
-                radius = gaussian_radius((math.ceil(h), math.ceil(w)))
-                radius = max(0, int(radius))
-                
-                ct = np.array([(x1 + x2) / 2, (y1 + y2) / 2], dtype=np.float32)
-                ct_int = ct.astype(np.int32)
-                
-                batch_hm[:, :, cls_id] = draw_gaussian(batch_hm[:, :, cls_id], ct_int, radius)
-                
-                batch_wh[ct_int[1], ct_int[0]] = 1. * w, 1. * h
-
-                batch_offset[ct_int[1], ct_int[0]] = ct - ct_int
-
-                batch_offset_mask[ct_int[1], ct_int[0]] = 1
-        
-        file_name = self.file_names[idx] 
-        
-        return image, batch_hm, batch_wh, batch_offset, batch_offset_mask, file_name
+        if self.target == "class":
+            pbox = self.pboxes[idx]
+            pre_hm, pre_wh, pre_offset, _ = cal_feature(image, pbox, self.output_shape, 1, self.stride) 
+            return image, batch_hm, batch_wh, batch_offset, batch_offset_mask, pre_hm, pre_wh, pre_offset, file_name
+        else:
+            return image, batch_hm, batch_wh, batch_offset, batch_offset_mask, file_name
     
 
         
