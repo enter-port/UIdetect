@@ -5,6 +5,5 @@ data/onedrive
 data/skype
 data/winmediaplayer
 logs
-eval
 __init__.py
 third_party

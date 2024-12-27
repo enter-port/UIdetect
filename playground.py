@@ -65,6 +65,25 @@ def show_bbox(image, coords, names):
         cv2.putText(image, names[i], (x_min, y_min), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
     cv2.imshow("image", image)
     cv2.waitKey(0)
+    
+def detect_edges(image_path):
+    # Read the image
+    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    
+    # Check if image is loaded successfully
+    if image is None:
+        print("Error: Unable to load image.")
+        return
+    
+    # Apply GaussianBlur to reduce noise and improve edge detection
+    blurred_image = cv2.GaussianBlur(image, (5, 5), 1.4)
+    
+    # Perform Canny edge detection
+    edges = cv2.Canny(blurred_image, 50, 150)
+    
+    # Save the result
+    cv2.imshow("image", edges)
+    cv2.waitKey(0)
 
 
 def main():   
@@ -77,8 +96,7 @@ def main():
                 if 'level_1' in names:
                     img_path = xml_path.replace(".xml", ".png")
                     if os.path.exists(img_path):
-                        image = cv2.imread(img_path)
-                        show_bbox(image, coords, names)
+                        detect_edges(img_path)
 
 if __name__  == "__main__":
     main()
