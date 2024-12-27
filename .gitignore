@@ -7,3 +7,5 @@ data/winmediaplayer
 logs
 __init__.py
 third_party
+dino_venv/
+pretrained/
