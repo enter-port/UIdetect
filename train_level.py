@@ -242,9 +242,9 @@ def main():
     # First create ./log dict to store the results
     # By default we will name the folder according to the current time
     now =  datetime.now()
-    weight_path = "./logs/{}-{}-{}-{}-{}-{}/weights".format(
+    weight_path = "./logs/{}-{}-{}-{}-{}-{}/level/weights".format(
         now.year, now.month, now.day, now.hour, now.minute, now.second)
-    summary_path = "./logs/{}-{}-{}-{}-{}-{}/summary".format(
+    summary_path = "./logs/{}-{}-{}-{}-{}-{}/level/summary".format(
         now.year, now.month, now.day, now.hour, now.minute, now.second)
     remove_dir_and_create_dir(weight_path)
     remove_dir_and_create_dir(summary_path)
