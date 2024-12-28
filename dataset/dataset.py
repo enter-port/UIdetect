@@ -145,7 +145,7 @@ class UIDataset(Dataset):
                         new_bboxes.append(box)
                         new_names.append(name.lower())
                         
-                corners = []
+                """corners = []
                 iconish_boxes = []
                 for pbox in pboxes:
                     x0, y0, x1, y1 = pbox
@@ -174,7 +174,7 @@ class UIDataset(Dataset):
                     new_rect = image[new_y0:new_y1, new_x0:new_x1]
                     avg_color = new_rect.mean(axis=(0, 1))
 
-                    image[y0:y1, x0:x1] = avg_color
+                    image[y0:y1, x0:x1] = avg_color"""
                 
                 image, bboxes, pboxes = image_resize(image, input_shape, np.array(bboxes), np.array(pboxes))
                 cv2.imshow("image", image)
