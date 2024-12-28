@@ -9,4 +9,7 @@ __init__.py
 third_party
 dino_venv/
 pretrained/
+data_level
+*.pt
+model_to_be_tested
 model_to_be_tested/

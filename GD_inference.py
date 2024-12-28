@@ -60,7 +60,7 @@ def main():
         for i in range(images.size()[0]):
             # the saving directory of each image should be under base_log_path
             image = images[i]
-            text_prompt = 'ClickableUIBox . ScrollableUIBox . SelectableUIBox' # WE DONT CARE CATEGORIES IN NEW PIPELINE 
+            text_prompt = 'ClickableUIBox . ScrollableUIBox . SelectableUIBox . Icon' # WE DONT CARE CATEGORIES IN NEW PIPELINE 
             
             # define output directory based on the basename of the image
             img_name = f'image_{step}'

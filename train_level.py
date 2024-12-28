@@ -283,8 +283,8 @@ def main():
         json.dump(hyper_params, f, indent=4)
 
     # get CenterNet model
-    num_cat = 4 if target == "class" else 3
-    category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["level_0", "level_1", "level_2"]
+    num_cat = 4 if target == "class" else 1
+    category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["root", "level_0", "level_1", "level_2"]
     model = CenterNet(backbone="resnet101", num_classes=num_cat)
     model.to(device)
     print("Model create successful.")

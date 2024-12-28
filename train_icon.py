@@ -266,8 +266,8 @@ def main():
     step = 0
     input_shape = (1280, 1920)  # Please ensure the number you've put here can be devided by 32
     batch_size = 1
-    init_lr = 5e-3
-    end_lr = 1e-6
+    init_lr = 5e-4
+    end_lr = 1e-7
     freeze_epoch = 100
     unfreeze_epoch = 500
     target = "class"

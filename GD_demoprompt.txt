@@ -1,7 +1,0 @@
-python.exe demo/inference_on_a_image.py `
-    -c groundingdino/config/GroundingDINO_SwinT_OGC.py `
-    -p weights/groundingdino_swint_ogc.pth `
-    -i .asset/UIdemo.png `
-    -o logs/demo_14 `
-    -t "UIBox" `
-    --cpu-only
