@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from torchvision.ops import nms
 from utils.data_utils import recover_input
+import shutil
 import os
 
 def postprocess_output(hms, whs, offsets, confidence, device):
