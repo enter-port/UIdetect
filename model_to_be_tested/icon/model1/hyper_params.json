@@ -1,0 +1,12 @@
+{
+    "input_shape": [
+        1280,
+        1920
+    ],
+    "batch_size": 1,
+    "init_lr": 0.005,
+    "end_lr": 1e-06,
+    "freeze_epoch": 100,
+    "unfreeze_epoch": 500,
+    "target": "class"
+}
