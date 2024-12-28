@@ -1,4 +1,5 @@
 from torch import nn
+import torch
 import math
 from model.backbone.resnet import resnet50, resnet101
 from utils.loss import focal_loss, l1_loss
@@ -76,6 +77,9 @@ class CenterBoxNet(nn.Module):
         x = self.decoder(x)
         if kwargs.get('mode') == "train":
             hms_pre, whs_pre, offsets_pre = kwargs.get('pre_box_data')
+            hms_pre = hms_pre.permute(0, 3, 1, 2).to(x.device)
+            whs_pre = whs_pre.permute(0, 3, 1, 2).to(x.device)
+            offsets_pre = offsets_pre.permute(0, 3, 1, 2).to(x.device)
             box = self.box(hms_pre, whs_pre, offsets_pre)
             x = self.merge(x, box)
         

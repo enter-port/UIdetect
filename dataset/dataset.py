@@ -91,18 +91,22 @@ class UIDataset(Dataset):
                     ]
                 
                 if self.target == "class":
+                    new_pboxes = []
                     with open(pre_path, 'r') as f:
                         pre_bboxes = json.load(f)
                     for i in range(len(pre_bboxes)):
-                        pre_bboxes[i] = [
+                        box = [
                             pre_bboxes[i][0] - x0,
                             pre_bboxes[i][1] - y0,
                             pre_bboxes[i][2] - x0,
                             pre_bboxes[i][3] - y0
                         ]
+                        if all(coord > 0 for coord in box):
+                            new_pboxes.append(box)
                         
             coords = new_coords
             names = new_names
+            pre_bboxes = new_pboxes
             
             if names == []:
                 continue

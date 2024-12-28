@@ -7,7 +7,7 @@ import numpy as np
 import torch.optim as optim
 from tqdm import tqdm
 from datetime import datetime
-from model.centernet import CenterNet
+from model.centernetwithbox import CenterBoxNet
 from dataset.dataset import UIDataset
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
@@ -181,7 +181,7 @@ def train_one_epoch(model, train_loader, epoch, optimizer, scheduler, device, wr
                          offset_loss="{:.4f}".format(off_loss.item()))
 
         # clear batch variables from memory
-        del images, hms_true, whs_true, offsets_true, offset_masks_true
+        del images, hms_true, whs_true, offsets_true, offset_masks_true, pre_hm, pre_wh, pre_offset
 
     return np.mean(total_loss)
 
@@ -196,7 +196,7 @@ def eval_one_epochs(model, val_loader, epoch, device, writer, cat, input_shape):
     write_image = True
 
     with torch.no_grad():
-        for images, hms_true, whs_true, offsets_true, offset_masks_true, _, _, _, _ in val_loader:
+        for images, hms_true, whs_true, offsets_true, offset_masks_true, pre_hm, pre_wh, pre_offset, _ in val_loader:
 
             # Set variables for training
             images = images.float().to(device)
@@ -206,10 +206,12 @@ def eval_one_epochs(model, val_loader, epoch, device, writer, cat, input_shape):
             offset_masks_true = offset_masks_true.float().to(device)
 
             # Get model predictions, calculate loss
-            training_output = model(images, mode='train', ground_truth_data=(hms_true,
-                                                                             whs_true,
-                                                                             offsets_true,
-                                                                             offset_masks_true))
+            training_output = model(images, mode='train', 
+                                    pre_box_data = (pre_hm, pre_wh, pre_offset),
+                                    ground_truth_data=(hms_true,
+                                                    whs_true,
+                                                    offsets_true,
+                                                    offset_masks_true))
             hms_pred, whs_pred, offsets_pred, loss, c_loss, wh_loss, off_loss, hms_true = training_output
 
             loss = loss.mean()
@@ -231,7 +233,7 @@ def eval_one_epochs(model, val_loader, epoch, device, writer, cat, input_shape):
                     writer.add_image('val_images_{}'.format(i), summary_image, global_step=epoch, dataformats="HWC")
 
             # clear batch variables from memory
-            del images, hms_true, whs_true, offsets_true, offset_masks_true
+            del images, hms_true, whs_true, offsets_true, offset_masks_true, pre_hm, pre_wh, pre_offset
 
         writer.add_scalar("val_loss", np.mean(total_loss), epoch)
         writer.add_scalar("val_c_loss", np.mean(total_c_loss), epoch)
@@ -265,9 +267,9 @@ def main():
     input_shape = (1280, 1920)  # Please ensure the number you've put here can be devided by 32
     batch_size = 1
     init_lr = 5e-3
-    end_lr = 1e-5
-    freeze_epoch = 0
-    unfreeze_epoch = 100
+    end_lr = 1e-6
+    freeze_epoch = 100
+    unfreeze_epoch = 500
     target = "class"
     data_path = "./data"
     
@@ -287,7 +289,7 @@ def main():
     # get CenterNet model
     num_cat = 4 if target == "class" else 3
     category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["level_0", "level_1", "level_2"]
-    model = CenterNet(backbone="resnet101", num_classes=num_cat)
+    model = CenterBoxNet(backbone="resnet101", num_classes=num_cat)
     model.to(device)
     print("Model create successful.")
     
