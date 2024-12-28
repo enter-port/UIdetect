@@ -284,7 +284,7 @@ def main():
 
     # get CenterNet model
     num_cat = 4 if target == "class" else 1
-    category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["root", "level_0", "level_1", "level_2"]
+    category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["level"]
     model = CenterNet(backbone="resnet101", num_classes=num_cat)
     model.to(device)
     print("Model create successful.")
