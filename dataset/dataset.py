@@ -115,7 +115,7 @@ class UIDataset(Dataset):
                 image, bbox, pbbox = image_resize(image, input_shape, np.arra(coords), np.array(pre_bboxes))
                 image = preprocess_input(image)
                 
-                category_indices = np.array([int(self.category.index(name.lowe())) for name in names])
+                category_indices = np.array([int(self.category.index(name.lower())) for name in names])
                 bbox = np.column_stack((bbox, category_indices))
                 
                 pre_category_indices = np.array([0 for _ in range(len(pbbox))])
