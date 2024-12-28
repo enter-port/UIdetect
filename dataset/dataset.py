@@ -1,4 +1,5 @@
 import os 
+import cv2
 import math
 import json
 import torch
@@ -19,8 +20,8 @@ class UIDataset(Dataset):
         self.is_train = is_train
         
         self.target = target
-        self.category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["level_0", "level_1", "level_2"]
-        self.num_cat = len(self.category)
+        self.category =["clickable", "selectable", "scrollable", "disabled"] if target == "class" else ["root", "level_0", "level_1", "level_2"]
+        self.num_cat = 4 if target == "class" else 1
         
         if not os.path.exists(data_path + "/train_test_split.json"):
             print("No train-test split. We create one at random.")
@@ -58,27 +59,28 @@ class UIDataset(Dataset):
             self.pboxes = []
         
         pbar = tqdm(data_names)
-        for name in pbar:
-            img_path = data_path + name + ".png"
-            xml_path = data_path + name + ".xml"
-            pre_path = data_path + name + ".json"
-        
-            image = Image.open(img_path)
-            image = np.array(image)[:, :, :3]
-            coords, names = parse_xml(xml_path)
+        if self.target == "class":
+            for name in pbar:
+                self.file_names.append(name + ".png") 
+                img_path = data_path + name + ".png"
+                xml_path = data_path + name + ".xml"
+                pre_path = data_path + name + ".json"
+            
+                image = Image.open(img_path)
+                image = np.array(image)[:, :, :3]
+                coords, names = parse_xml(xml_path)
 
-            root_coords = None
-            new_coords = []
-            new_names = []
-            
-            for coord, name in zip(coords, names):
-                if name.lower() == "root":
-                    root_coords = coord
-                elif name.lower() in self.category:
-                    new_coords.append(coord)
-                    new_names.append(name.lower())
-            
-            if root_coords is not None:
+                root_coords = None
+                new_coords = []
+                new_names = []
+                
+                for coord, name in zip(coords, names):
+                    if name.lower() == "root":
+                        root_coords = coord
+                    elif name.lower() in self.category:
+                        new_coords.append(coord)
+                        new_names.append(name.lower())
+                
                 x0, y0, x1, y1 = root_coords
                 image = image[y0:y1, x0:x1]
                 
@@ -90,32 +92,30 @@ class UIDataset(Dataset):
                         new_coords[i][3] - y0
                     ]
                 
-                if self.target == "class":
-                    new_pboxes = []
-                    with open(pre_path, 'r') as f:
-                        pre_bboxes = json.load(f)
-                    for i in range(len(pre_bboxes)):
-                        box = [
-                            pre_bboxes[i][0] - x0,
-                            pre_bboxes[i][1] - y0,
-                            pre_bboxes[i][2] - x0,
-                            pre_bboxes[i][3] - y0
-                        ]
-                        if all(coord > 0 for coord in box):
-                            new_pboxes.append(box)
+                new_pboxes = []
+                with open(pre_path, 'r') as f:
+                    pre_bboxes = json.load(f)
+                for i in range(len(pre_bboxes)):
+                    box = [
+                        pre_bboxes[i][0] - x0,
+                        pre_bboxes[i][1] - y0,
+                        pre_bboxes[i][2] - x0,
+                        pre_bboxes[i][3] - y0
+                    ]
+                    if all(coord > 0 for coord in box):
+                        new_pboxes.append(box)
                         
-            coords = new_coords
-            names = new_names
-            pre_bboxes = new_pboxes
+                coords = new_coords
+                names = new_names
+                pre_bboxes = new_pboxes
             
-            if names == []:
-                continue
-                       
-            if self.target == "class":
-                image, bbox, pbbox = image_resize(image, input_shape, np.array(coords), np.array(pre_bboxes))
+                if names == []:
+                    continue
+                        
+                image, bbox, pbbox = image_resize(image, input_shape, np.arra(coords), np.array(pre_bboxes))
                 image = preprocess_input(image)
                 
-                category_indices = np.array([int(self.category.index(name.lower())) for name in names])
+                category_indices = np.array([int(self.category.index(name.lowe())) for name in names])
                 bbox = np.column_stack((bbox, category_indices))
                 
                 pre_category_indices = np.array([0 for _ in range(len(pbbox))])
@@ -124,19 +124,68 @@ class UIDataset(Dataset):
                 self.images.append(image)
                 self.bboxes.append(bbox)
                 self.pboxes.append(pbbox)
+        
+        elif self.target == "level":
+            for name in pbar:
+                self.file_names.append(name + ".png") 
+                img_path = data_path + name + ".png"
+                xml_path = data_path + name + ".xml"
             
-            else:
-                image, bbox = image_resize(image, input_shape, np.array(coords))
-                image = preprocess_input(image)
-                assert len(coords) == len(names)
+                image = Image.open(img_path)
+                image = np.array(image)[:, :, :3]
+                bboxes, names = parse_xml(xml_path)
+                with open(data_path + name + ".json", 'r') as f:
+                    pboxes = json.load(f)
+                    
+                new_bboxes = []
+                new_names = []
                 
-                category_indices = np.array([int(self.category.index(name.lower())) for name in names])
-                bbox = np.column_stack((bbox, category_indices))
+                for box, name in zip(bboxes, names):
+                    if name.lower() in self.category:
+                        new_bboxes.append(box)
+                        new_names.append(name.lower())
+                        
+                corners = []
+                iconish_boxes = []
+                for pbox in pboxes:
+                    x0, y0, x1, y1 = pbox
+                    corners.extend([(x0, y0), (x0, y1), (x1, y0), (x1, y1)])
+                    
+                for pbox in pboxes:
+                    x0, y0, x1, y1 = pbox
+                    is_overlapping = False
+                    for (cx, cy) in corners:
+                        if x0 < cx < x1 and y0 < cy < y1:
+                            is_overlapping = True
+                            break
+                    if not is_overlapping:
+                        iconish_boxes.append(pbox)
+                
+                for box in iconish_boxes:
+                    x0, y0, x1, y1 = box
+                    center_x, center_y = (x0 + x1) // 2, (y0 + y1) // 2
+                    new_width, new_height = (x1 - x0) * 2, (y1 - y0) * 2
+                    new_x0, new_y0 = center_x - new_width // 2, center_y - new_height // 2
+                    new_x1, new_y1 = center_x + new_width // 2, center_y + new_height // 2
+
+                    new_x0, new_y0 = max(new_x0, 0), max(new_y0, 0)
+                    new_x1, new_y1 = min(new_x1, image.shape[1]), min(new_y1, image.shape[0])
+
+                    new_rect = image[new_y0:new_y1, new_x0:new_x1]
+                    avg_color = new_rect.mean(axis=(0, 1))
+
+                    image[y0:y1, x0:x1] = avg_color
+                
+                image, bboxes, pboxes = image_resize(image, input_shape, np.array(bboxes), np.array(pboxes))
+                cv2.imshow("image", image)
+                cv2.waitKey(0)
+                image = preprocess_input(image)
+                category_indices = np.array([0 for _ in range(len(bboxes))])
+                bboxes = np.column_stack((bboxes, category_indices))
                 
                 self.images.append(image)
-                self.bboxes.append(bbox)
-                
-            self.file_names.append(name + ".png") 
+                self.bboxes.append(bboxes)
+               
             
         self.length = len(self.images)
         assert len(self.images) == len(self.bboxes)
