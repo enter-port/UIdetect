@@ -81,38 +81,38 @@ class UIDataset(Dataset):
                         new_coords.append(coord)
                         new_names.append(name.lower())
                 
-                x0, y0, x1, y1 = root_coords
-                image = image[y0:y1, x0:x1]
-                
-                for i in range(len(new_coords)):
-                    new_coords[i] = [
-                        new_coords[i][0] - x0,
-                        new_coords[i][1] - y0,
-                        new_coords[i][2] - x0,
-                        new_coords[i][3] - y0
-                    ]
-                
-                new_pboxes = []
-                with open(pre_path, 'r') as f:
-                    pre_bboxes = json.load(f)
-                for i in range(len(pre_bboxes)):
-                    box = [
-                        pre_bboxes[i][0] - x0,
-                        pre_bboxes[i][1] - y0,
-                        pre_bboxes[i][2] - x0,
-                        pre_bboxes[i][3] - y0
-                    ]
-                    if all(coord > 0 for coord in box):
-                        new_pboxes.append(box)
-                        
+                if root_coords is not None:
+                    x0, y0, x1, y1 = root_coords
+                    image = image[y0:y1, x0:x1]
+                    for i in range(len(new_coords)):
+                        new_coords[i] = [
+                            new_coords[i][0] - x0,
+                            new_coords[i][1] - y0,
+                            new_coords[i][2] - x0,
+                            new_coords[i][3] - y0
+                        ]
+                    
+                    new_pboxes = []
+                    with open(pre_path, 'r') as f:
+                        pre_bboxes = json.load(f)
+                    for i in range(len(pre_bboxes)):
+                        box = [
+                            pre_bboxes[i][0] - x0,
+                            pre_bboxes[i][1] - y0,
+                            pre_bboxes[i][2] - x0,
+                            pre_bboxes[i][3] - y0
+                        ]
+                        if all(coord > 0 for coord in box):
+                            new_pboxes.append(box)
+                    pre_bboxes = new_pboxes
+                            
                 coords = new_coords
                 names = new_names
-                pre_bboxes = new_pboxes
             
                 if names == []:
                     continue
                         
-                image, bbox, pbbox = image_resize(image, input_shape, np.arra(coords), np.array(pre_bboxes))
+                image, bbox, pbbox = image_resize(image, input_shape, np.array(coords), np.array(pre_bboxes))
                 image = preprocess_input(image)
                 
                 category_indices = np.array([int(self.category.index(name.lower())) for name in names])
