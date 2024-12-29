@@ -26,8 +26,8 @@ def create_dino_args():
     
     # 模型基础参数
     args.modelname = 'dino'
-    # args.frozen_weights = ['backcone', 'transformer.encoder', 'transformer.decoder']
-    args.frozen_weights = None
+    args.frozen_weights = ['backcone', 'transformer.encoder', 'transformer.decoder']
+    # args.frozen_weights = None
     args.backbone = 'resnet50'
     args.use_checkpoint = False
     args.dilation = False
@@ -85,7 +85,7 @@ def create_dino_args():
     args.two_stage_learn_wh = False
     args.two_stage_default_hw = 0.05
     args.two_stage_keep_all_tokens = False
-    args.num_select = 300
+    args.num_select = 50
     
     # 其他模型参数
     args.transformer_activation = 'relu'
@@ -145,10 +145,10 @@ def create_dino_args():
     args.device = 'cuda'
     args.seed = 42
     args.resume = ''
-    # args.pretrain_model_path = 'pretrained/checkpoint0011_4scale.pth'
-    args.pretrain_model_path = None
-    # args.finetune_ignore = ["label_enc.weight", "class_embed"]
-    args.finetune_ignore = None
+    args.pretrain_model_path = 'pretrained/checkpoint0011_4scale.pth'
+    # args.pretrain_model_path = None
+    args.finetune_ignore = ["label_enc.weight", "class_embed"]
+    # args.finetune_ignore = None
     args.start_epoch = 0
     args.eval = False
     args.num_workers = 10
@@ -178,5 +178,5 @@ def create_dino_args():
     args.wo_class_error = False #分类获取误差
     args.pre_train = True # 是否加载model zoo中提供的预训练模型
     args.finetune = False # 是否基于预训练模型FINETUNE
-    args.viz = False # 每一个epoch结束是否可视化一张图像    
+    args.vis = False # 每一个epoch结束是否可视化一张图像    
     return args

@@ -183,14 +183,8 @@ def eval_one_epoch(model, criterion, postprocessors, eval_loader,
         # post_process procedure
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors['bbox'](outputs, orig_target_sizes) # [scores: [num_of_boxes], labels: [num_of_boxes], boxes: [num_of_boxes, 4]] x B
-        
-        # no mask used in this task, so "segm" can be ignored
-        if 'segm' in postprocessors.keys():
-            target_sizes = torch.stack([t["size"] for t in targets], dim=0)
-            results = postprocessors['segm'](results, outputs, orig_target_sizes, target_sizes)
-            
-        res = {target['image_id'].item(): output for target, output in zip(targets, results)}
-        
+        # print(results[0]['boxes'])
+        # print(targets[0]["boxes"])
         # put the result in standarized format if needed
         for i, (tgt, res) in enumerate(zip(targets, results)):
             """

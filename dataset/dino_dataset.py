@@ -97,6 +97,7 @@ class UIDataset(Dataset):
         bbox = np.array(self.bboxes[idx])
         bbox_origin = bbox
         bbox = bbox[:, :4]
+        # print("bbox:", bbox)
         cat_ids = bbox_origin[:, 4]
         w, h = (image.shape)[1:]
 
