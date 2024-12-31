@@ -5,7 +5,7 @@ def create_dino_args():
     
     # 基础配置
     args.num_classes = 10
-    args.lr = 0.0001
+    args.lr = 0.0002
     args.param_dict_type = 'default'
     args.lr_backbone = 1e-05
     args.lr_backbone_names = ['backbone.0']
@@ -26,8 +26,8 @@ def create_dino_args():
     
     # 模型基础参数
     args.modelname = 'dino'
-    args.frozen_weights = ['backcone', 'transformer.encoder', 'transformer.decoder']
-    # args.frozen_weights = None
+    # args.frozen_weights = ['backcone', 'transformer.encoder', 'transformer.decoder']
+    args.frozen_weights = None
     args.backbone = 'resnet50'
     args.use_checkpoint = False
     args.dilation = False
@@ -146,6 +146,7 @@ def create_dino_args():
     args.seed = 42
     args.resume = ''
     args.pretrain_model_path = 'pretrained/checkpoint0011_4scale.pth'
+    # args.pretrain_model_path = 'logs/2024-12-29-19-40-37/weights/checkpoint_epoch_95.pth'
     # args.pretrain_model_path = None
     args.finetune_ignore = ["label_enc.weight", "class_embed"]
     # args.finetune_ignore = None
@@ -163,10 +164,8 @@ def create_dino_args():
     args.local_rank = None
     args.amp = False
     args.clip_max_norm = 0.1
-    args.lr = 0.0001
-    args.lr_backbone = 1e-05
     args.weight_decay = 0.0001
-    args.epochs = 1
+    args.epochs = 200
     args.lr_drop = 11
     args.save_checkpoint_interval = 1
     args.clip_max_norm = 0.1
@@ -177,6 +176,6 @@ def create_dino_args():
     args.input_shape = (1280, 1920) # 输入的图片大小
     args.wo_class_error = False #分类获取误差
     args.pre_train = True # 是否加载model zoo中提供的预训练模型
-    args.finetune = False # 是否基于预训练模型FINETUNE
+    args.finetune = True # 是否基于预训练模型FINETUNE
     args.vis = False # 每一个epoch结束是否可视化一张图像    
     return args

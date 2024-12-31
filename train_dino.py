@@ -183,7 +183,7 @@ def eval_one_epoch(model, criterion, postprocessors, eval_loader,
         # post_process procedure
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors['bbox'](outputs, orig_target_sizes) # [scores: [num_of_boxes], labels: [num_of_boxes], boxes: [num_of_boxes, 4]] x B
-        # print(results[0]['boxes'])
+        # print(results[0]['scores'])
         # print(targets[0]["boxes"])
         # put the result in standarized format if needed
         for i, (tgt, res) in enumerate(zip(targets, results)):
@@ -293,6 +293,7 @@ def main():
     # load model from given path
     if args.pre_train and args.pretrain_model_path:
         checkpoint = torch.load(args.pretrain_model_path, map_location='cpu')['model']
+        # checkpoint = torch.load(args.pretrain_model_path, map_location='cpu')['model_state_dict']
                 
         # freeze some weights and ignore some weights when fine-tunning
         _ignorekeywordlist = args.finetune_ignore if args.finetune_ignore else []
@@ -339,7 +340,15 @@ def main():
         
         # Evaluation process provided by TA!
         
-        # visualization process on first several images
+        # visualization of the first graph
+        if args.vis:
+            first_image_res_info = result_dict['res_info'][0]
+            print("predicted info of the first image:", first_image_res_info)
+            image, target = test_dataset[1] # image: (3,1280, 1920), np.ndarray
+            image_restored = deprocess_input(image)
+            original_shape = (1280, 1920)
+            image_name = f'image_0_demo'
+            visualize_and_save( first_image_res_info, image_name=image_name, image=image_restored, save_path=vis_path)
         
         print(f'Average evaluation loss of this model:{average_eval_loss}')
         return
@@ -370,24 +379,12 @@ def main():
         # Evaluation process! based on TA's script
         # Maybe use result dict here for evaluation
         
-        # visualization of the first graph
-        if args.vis:
-            first_image_gt_info = result_dict['gt_info'][0]
-            first_image_res_info = result_dict['res_info'][0]
-            # print("gt info of the first image:", first_image_gt_info)
-            # print("predicted info of the first image:", first_image_res_info)
-            image, target = test_dataset[0] # image: (3,1280, 1960), np.ndarray
-            image_restored = deprocess_input(image)
-            original_shape = (1280, 1960)
-            image_name = f'image_{epoch}'
-            visualize_and_save(image_restored, first_image_gt_info, first_image_res_info, save_dir=vis_path, image_name=image_name, original_size=original_shape)
-        
         print("=> train loss: {:.4f}   val loss: {:.4f}".format(averge_train_loss, average_eval_loss))
             
         # save model after every epoch
         # After we have evaluation process, we can save model only when better result is obtained
-        # Currently we simply save model after each epoch
-        save_model(model, epoch, weight_path, optimizer)
+        if epoch % 20 == 0:
+            save_model(model, epoch, weight_path, optimizer)
         epoch_duration = time.time() - epoch_start_time
         print(f"Epoch {epoch} completed in {epoch_duration:.2f}s")
         

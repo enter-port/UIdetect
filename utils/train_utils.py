@@ -346,40 +346,21 @@ def to_device(item, device):
     else:
         raise NotImplementedError("Call Shilong if you use other containers! type: {}".format(type(item)))
     
-def visualize_and_save(gt_info, res_info, image_name, image, save_path, original_size):
+def visualize_and_save(res_info, image_name, image, save_path):
     """
-    可视化并保存图像，绘制预测框与真实框（gt_info为归一化坐标）。
-
-    :param gt_info: 真实框信息 (Tensor) [x_min, y_min, x_max, y_max, label] (归一化坐标)
+    可视化并保存图像，绘制预测框与真实框
     :param res_info: 预测框信息 (Tensor) [x_min, y_min, x_max, y_max, score, label]
     :param image_name: 图像名称
     :param image: 图像数据 (ndarray, RGB格式, CHW)
     :param save_path: 保存路径
-    :param original_size: 原始图像大小 (width, height)
     """
 
     # 将图像从 CHW 格式转换为 HWC 格式，并从 RGB 转换为 BGR (OpenCV 使用 BGR)
-    image_bgr = np.transpose(image, (1, 2, 0))  # CHW -> HWC
-    image_bgr = image_bgr[:, :, ::-1]  # RGB -> BGR
-
-    # 恢复到原始尺寸
-    image_bgr = cv2.resize(image_bgr, (original_size[0], original_size[1]))
-
-    # 获取原始图像的宽度和高度
-    img_width, img_height = original_size
-
-    # 画真实框 (gt_info), 这里的gt_info是归一化坐标，转换为像素坐标
-    for box in gt_info:
-        # 从归一化坐标转换为像素坐标
-        x_min, y_min, x_max, y_max, label = box.tolist()
-        x_min = int(x_min * img_width)
-        y_min = int(y_min * img_height)
-        x_max = int(x_max * img_width)
-        y_max = int(y_max * img_height)
-        
-        color = (0, 255, 0)  # 绿色
-        cv2.rectangle(image_bgr, (x_min, y_min), (x_max, y_max), color, 2)
-        cv2.putText(image_bgr, f"GT: {int(label)}", (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    # image_bgr = np.transpose(image, (1, 2, 0))  # CHW -> HWC
+    image_bgr = image[:, :, ::-1]  # RGB -> BGR
+    image_bgr = image_bgr.astype(np.uint8)
+    
+    # print("shape of image_bgr:", image_bgr.shape)
 
     # 画预测框 (res_info)
     for box in res_info:
