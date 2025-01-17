@@ -100,6 +100,8 @@ class UIDataset(Dataset):
         # print("bbox:", bbox)
         cat_ids = bbox_origin[:, 4]
         w, h = (image.shape)[1:]
+        print("w:", w)
+        print("h:", h)
 
         bbox = torch.as_tensor(bbox, dtype=torch.float32).reshape(-1, 4)
         x0, y0, x1, y1 = bbox.unbind(-1)

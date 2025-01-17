@@ -74,15 +74,18 @@ def main():
     category_path = "./data/categories.txt"
     
     test_dataset = UIDataset(data_path="./data", category_path=category_path, input_shape=input_shape, is_train=False) 
+    eval_loader = DataLoader(test_dataset, shuffle=True, batch_size=1, num_workers=0, pin_memory=True)
     
     image, target = test_dataset[0] # image: (3,1280, 1960), np.ndarray
-    image_restored = deprocess_input(image)
-    image_bgr = image_restored[:, :, ::-1]
-    print("target data:",target)
+    print("shape of image:", image.shape)
+    print("target:", target)
+    # image_restored = deprocess_input(image)
+    # image_bgr = image_restored[:, :, ::-1]
+    # print("target data:",target)
     
-    cv2.imshow("Demo Image", image_bgr) 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow("Demo Image", image_bgr) 
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     
 if __name__ == '__main__':
     main()
